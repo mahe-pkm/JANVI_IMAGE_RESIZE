@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  logo-processor:
+    build: .
+    container_name: logo-processor-dashboard
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount the Resizing (input) and Re-sized (output) directories to host
+      - ./Resizing:/app/Resizing
+      - ./Re-sized:/app/Re-sized
+    environment:
+      - BASE_DIR=/app
+      - IS_DOCKER=true
+    restart: unless-stopped

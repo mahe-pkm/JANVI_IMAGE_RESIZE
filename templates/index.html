@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subject-Aware Logo Processor Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-title">
+                    <span class="brand-icon">✨</span>
+                    <h2>LogoProcessor</h2>
+                </div>
+                <button id="theme-toggle" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
+                    <span class="theme-toggle-icon">🌙</span>
+                </button>
+            </div>
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" id="nav-dash">
+                    <span class="nav-icon">📊</span> Dashboard
+                </a>
+                <a href="#pipeline" class="nav-item" id="nav-pipe">
+                    <span class="nav-icon">⚡</span> Run Pipeline
+                </a>
+                <a href="#padded" class="nav-item" id="nav-pad">
+                    <span class="nav-icon">🖼️</span> Padded Images <span class="badge" id="pad-badge">0</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot idle" id="system-dot"></span>
+                    <span id="system-status-text">System Idle</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Section: Dashboard -->
+            <section id="sec-dashboard" class="content-section active">
+                <header class="section-header">
+                    <div>
+                        <h1>Image Operations Dashboard</h1>
+                        <p>Monitor collection auditing, subject-aware resizing, and Shopify outputs.</p>
+                    </div>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📂</div>
+                        <div class="stat-content">
+                            <h3>Collections</h3>
+                            <p class="stat-value" id="stats-folders-count">-</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📷</div>
+                        <div class="stat-content">
+                            <h3>Total Input Images</h3>
+                            <p class="stat-value" id="stats-images-count">-</p>
+                        </div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-content">
+                            <h3>Padded Images</h3>
+                            <p class="stat-value" id="stats-padded-count">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-details">
+                    <div class="card col-list">
+                        <h2>Available Date Collections</h2>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date Folder</th>
+                                        <th>Images Detected</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="folders-table-body">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section: Run Pipeline -->
+            <section id="sec-pipeline" class="content-section">
+                <header class="section-header">
+                    <div>
+                        <h1>Execute Operations</h1>
+                        <p>Configure input/output settings, select a collection to run target analysis, or execute subject-aware resizing.</p>
+                    </div>
+                </header>
+
+                <div class="pipeline-controls">
+                    <!-- Directory Settings Card -->
+                    <div class="card settings-card">
+                        <h2>📁 Directory Configuration</h2>
+                        <div class="settings-grid">
+                            <div class="input-group">
+                                <label for="root-dir-input">
+                                    Source Root Folder 
+                                    <span id="root-validation-badge" class="status-badge status-checking">Checking...</span>
+                                </label>
+                                <div class="input-with-button">
+                                    <input type="text" id="root-dir-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Resizing">
+                                    <button class="btn btn-secondary btn-sm" id="btn-browse-root">📁 Browse</button>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="recent-folders-select">Recent Folders</label>
+                                <select id="recent-folders-select">
+                                    <option value="">-- No Recent History --</option>
+                                </select>
+                            </div>
+                            <div class="input-group full-width">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="use-default-output" checked>
+                                    Use default output path (alongside input folder)
+                                </label>
+                            </div>
+                            <div class="input-group full-width hidden" id="dest-dir-group">
+                                <label for="dest-dir-input">Output Destination Folder</label>
+                                <div class="input-with-button">
+                                    <input type="text" id="dest-dir-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Re-sized">
+                                    <button class="btn btn-secondary btn-sm" id="btn-browse-dest">📁 Browse</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shopify Export Settings Card -->
+                    <div class="card settings-card" id="shopify-export-settings">
+                        <h2>📦 Shopify Export Configuration</h2>
+                        <div class="settings-grid">
+                            <div class="input-group">
+                                <label for="export-src-input">Source Export Folder (contains 'Untitled Export' subfolders)</label>
+                                <div class="input-with-button">
+                                    <input type="text" id="export-src-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Re-sized\With Logo">
+                                    <button class="btn btn-secondary btn-sm" id="btn-browse-export-src">📁 Browse</button>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="export-dest-input">Shopify Output Folder (Final For Shopify)</label>
+                                <div class="input-with-button">
+                                    <input type="text" id="export-dest-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Re-sized\Final For Shopify">
+                                    <button class="btn btn-secondary btn-sm" id="btn-browse-export-dest">📁 Browse</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Operations Card -->
+                    <div class="card selector-card">
+                        <h2>⚡ Selection & Operation</h2>
+                        <div class="control-row">
+                            <div class="input-group">
+                                <label for="folder-select">Target Date Collection</label>
+                                <select id="folder-select">
+                                    <option value="">-- All Collections --</option>
+                                    <!-- Dynamic options -->
+                                </select>
+                            </div>
+                            <div class="button-group">
+                                <button class="btn btn-secondary" id="btn-audit">🔍 Analyze Padding</button>
+                                <button class="btn btn-primary" id="btn-resize">⚡ Run Resizing</button>
+                                <button class="btn btn-accent" id="btn-export">📦 Export to Shopify</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Background Task Progress Card -->
+                <div class="card progress-card hidden" id="active-task-card">
+                    <div class="progress-header">
+                        <div>
+                            <h2 id="task-title">Running Resizing...</h2>
+                            <p id="task-filename">Processing: image.png</p>
+                        </div>
+                        <button class="btn btn-danger btn-sm" id="btn-cancel">Cancel Task</button>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="task-progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="progress-footer">
+                        <span id="task-progress-text">0% Completed</span>
+                        <span id="task-count-text">0 / 0 images</span>
+                    </div>
+                </div>
+
+                <!-- Logs Terminal -->
+                <div class="card logs-card">
+                    <div class="logs-header">
+                        <h2>Execution Logs</h2>
+                        <button class="btn btn-sm btn-outline" id="btn-clear-logs">Clear Logs View</button>
+                    </div>
+                    <div class="terminal" id="log-terminal">
+                        <div class="log-line system">[System] Waiting for user operations...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section: Padded Images Gallery -->
+            <section id="sec-padded" class="content-section">
+                <header class="section-header">
+                    <div>
+                        <h1>Padded Images Queue</h1>
+                        <p>Review the list of images that were padded with blurred margins to prevent subject crop. Use these for outpainting verification.</p>
+                    </div>
+                </header>
+
+                <div class="card gallery-card">
+                    <div class="gallery-controls">
+                        <h2>Image Comparison Queue</h2>
+                        <p class="subtitle" id="gallery-count">Total: 0 images requiring manual patching</p>
+                    </div>
+
+                    <div class="gallery-grid" id="padded-gallery">
+                        <!-- Dynamic items -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal Image Preview -->
+    <div class="modal" id="image-modal">
+        <div class="modal-content">
+            <span class="close-btn" id="modal-close">&times;</span>
+            <h2 id="modal-title">Comparison</h2>
+            <div class="comparison-container">
+                <div class="comp-box">
+                    <h3>Original</h3>
+                    <img src="" id="modal-img-orig" alt="Original Image">
+                </div>
+                <div class="comp-box">
+                    <h3>Resized Output</h3>
+                    <img src="" id="modal-img-resized" alt="Resized Image">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folder Browser Modal -->
+    <div class="modal" id="browser-modal">
+        <div class="modal-content browser-content">
+            <span class="close-btn" id="browser-modal-close">&times;</span>
+            <h2>Select Folder</h2>
+            <div class="browser-path-bar">
+                <span class="path-label">Current Path:</span>
+                <span id="browser-current-path" class="path-value"></span>
+            </div>
+            <div class="browser-actions">
+                <button class="btn btn-secondary btn-sm" id="btn-browser-up">⬆️ Up One Level</button>
+            </div>
+            <div class="browser-list-container">
+                <ul id="browser-dir-list">
+                    <!-- Dynamic directories list -->
+                </ul>
+            </div>
+            <div class="browser-footer-buttons">
+                <button class="btn btn-primary" id="btn-browser-confirm">Select Current Folder</button>
+                <button class="btn btn-outline" id="btn-browser-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
