@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "runtime": "Photoshop ExtendScript JSX",
+  "validated_photoshop": "27.11.0",
+  "validated_platform": "Windows x64",
+  "command": "removeButton",
+  "action_file_required": false,
+  "formats": ["jpg", "jpeg", "png", "tif", "tiff"],
+  "minimum_available_memory_bytes": 536870912,
+  "network": "Determined by Photoshop Remove; may require Adobe network access",
+  "other_versions": "Require a disposable-image compatibility test before production use"
+}

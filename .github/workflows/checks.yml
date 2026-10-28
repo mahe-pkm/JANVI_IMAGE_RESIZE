@@ -1,0 +1,51 @@
+name: Source checks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-cpu:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: requirements-cpu.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Install pinned CPU dependencies
+        run: python -m pip install -r requirements-cpu.txt
+      - name: Check dependencies
+        run: python -m pip check
+      - name: Regression suite
+        run: python -m unittest discover -s tests -v
+      - name: JavaScript syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem static,desktop -Filter *.js -File | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw 'JavaScript syntax check failed' }
+          }
+      - name: Model checksum and desktop version
+        shell: pwsh
+        run: |
+          $model = Get-Content models/manifest.json -Raw | ConvertFrom-Json
+          if ((Get-FileHash (Join-Path models $model.file) -Algorithm SHA256).Hash -ne $model.sha256) {
+            throw 'Model checksum mismatch'
+          }
+          $package = Get-Content desktop/package.json -Raw | ConvertFrom-Json
+          $lock = Get-Content desktop/package-lock.json -Raw | ConvertFrom-Json
+          if ($package.version -ne $lock.version -or $package.version -ne $lock.packages.''.version) {
+            throw 'Desktop versions disagree'
+          }

@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from PIL import Image
-from ultralytics import YOLO
 
 # ---------------- CONFIGURATION ----------------
 BASE_DIR = Path(os.environ.get("BASE_DIR", Path(__file__).resolve().parent))
@@ -12,11 +11,13 @@ TARGET_W, TARGET_H = 1200, 1800
 # If True, the script will pad the image instead of cropping if the subject is too wide/tall to fit in the crop window.
 STRICT_NO_SUBJECT_CROP = True 
 PAD_COLOR = (255, 255, 255)
+SUBJECT_MARGIN = 0.05  # Fraction of source width/height, on each side.
 # -----------------------------------------------
 
 def get_model():
     print("Loading Subject Detection Model (YOLOv8)...")
-    model = YOLO('yolov8n.pt')
+    from ultralytics import YOLO
+    model = YOLO(str(Path(__file__).resolve().parent / "yolov8n.pt"))
     print("Model loaded.")
     return model, None
 
@@ -45,14 +46,54 @@ def get_subject_bbox(model, device, img):
             
     return largest_box
 
-def smart_crop_and_resize(img, bbox):
+def padding_geometry(content_x, content_y, content_w, content_h, target_width=TARGET_W, target_height=TARGET_H):
+    """Exact output-pixel rectangles, including asymmetric rounding at edges."""
+    left, top = content_x, content_y
+    right, bottom = target_width - left - content_w, target_height - top - content_h
+    rectangles = []
+    for side, x, y, width, height in [('left', 0, 0, left, target_height),
+                                     ('right', target_width-right, 0, right, target_height),
+                                     ('top', left, 0, content_w, top),
+                                     ('bottom', left, target_height-bottom, content_w, bottom)]:
+        if width > 0 and height > 0:
+            rectangles.append(dict(side=side, x=x, y=y, width=width, height=height))
+    return dict(canvas_width=target_width, canvas_height=target_height,
+                content=dict(x=left, y=top, width=content_w, height=content_h),
+                padding=dict(left=left, right=right, top=top, bottom=bottom), rectangles=rectangles)
+
+
+def crop_decision(size, bbox, target_width=TARGET_W, target_height=TARGET_H):
+    """Decide once for audit and resize; never crop on a missing detection."""
+    w, h = size
+    if w * target_height == h * target_width:
+        return {'padded': False, 'reason': 'correct_ratio', 'box': None}
+    if bbox is None:
+        return {'padded': True, 'reason': 'no_subject_detected', 'box': None}
+    xmin, ymin, xmax, ymax = bbox
+    if not (0 <= xmin < xmax <= w and 0 <= ymin < ymax <= h):
+        return {'padded': True, 'reason': 'invalid_subject_box', 'box': None}
+    protected = (max(0, xmin - w * SUBJECT_MARGIN), max(0, ymin - h * SUBJECT_MARGIN),
+                 min(w, xmax + w * SUBJECT_MARGIN), min(h, ymax + h * SUBJECT_MARGIN))
+    if w * target_height > h * target_width:
+        fits = protected[2] - protected[0] <= int(h * target_width / target_height)
+    else:
+        fits = protected[3] - protected[1] <= int(w * target_height / target_width)
+    return {'padded': not fits, 'reason': 'subject_margin' if not fits else 'subject_crop', 'box': protected}
+
+
+def smart_crop_and_resize(img, bbox, include_geometry=False, target_width=TARGET_W, target_height=TARGET_H):
+    def finish(image, padded, geometry=None):
+        return (image, padded, geometry) if include_geometry else (image, padded)
     w, h = img.size
-    target_ratio = TARGET_W / TARGET_H
+    target_ratio = target_width / target_height
     cur_ratio = w / h
     
-    # Subject center
-    if bbox:
-        xmin, ymin, xmax, ymax = bbox
+    decision = crop_decision(img.size, bbox, target_width, target_height)
+    if decision['reason'] == 'correct_ratio':
+        return finish(img.resize((target_width, target_height), Image.LANCZOS), False)
+    protected = decision['box']
+    if protected:
+        xmin, ymin, xmax, ymax = protected
         cx, cy = (xmin + xmax) / 2, (ymin + ymax) / 2
         subject_w = xmax - xmin
         subject_h = ymax - ymin
@@ -60,16 +101,14 @@ def smart_crop_and_resize(img, bbox):
         cx, cy = w / 2, h / 2
         subject_w, subject_h = 0, 0
 
-    use_padding = False
+    use_padding = decision['padded']
 
     if cur_ratio > target_ratio:
         # Image is wider than target. We need to crop width.
         crop_w = int(h * target_ratio)
         crop_h = h
         
-        if STRICT_NO_SUBJECT_CROP and bbox and subject_w > crop_w:
-            use_padding = True
-        else:
+        if not use_padding:
             left = cx - crop_w / 2
             # clamp
             left = max(0, min(w - crop_w, left))
@@ -79,9 +118,7 @@ def smart_crop_and_resize(img, bbox):
         crop_w = w
         crop_h = int(w / target_ratio)
         
-        if STRICT_NO_SUBJECT_CROP and bbox and subject_h > crop_h:
-            use_padding = True
-        else:
+        if not use_padding:
             top = cy - crop_h / 2
             # clamp
             top = max(0, min(h - crop_h, top))
@@ -95,38 +132,38 @@ def smart_crop_and_resize(img, bbox):
         bg_ratio = w / h
         if bg_ratio > target_ratio:
             # Scale by height to ensure it covers the target height
-            bg_h = TARGET_H
-            bg_w = int(TARGET_H * bg_ratio)
+            bg_h = target_height
+            bg_w = int(target_height * bg_ratio)
         else:
             # Scale by width to ensure it covers the target width
-            bg_w = TARGET_W
-            bg_h = int(TARGET_W / bg_ratio)
+            bg_w = target_width
+            bg_h = int(target_width / bg_ratio)
             
         bg_img = img.resize((bg_w, bg_h), Image.LANCZOS)
         
-        # Center crop the scaled image to exactly TARGET_W x TARGET_H
-        bg_left = (bg_w - TARGET_W) // 2
-        bg_top = (bg_h - TARGET_H) // 2
-        bg_img = bg_img.crop((bg_left, bg_top, bg_left + TARGET_W, bg_top + TARGET_H))
+        # Center crop the scaled image to exactly target_width x target_height
+        bg_left = (bg_w - target_width) // 2
+        bg_top = (bg_h - target_height) // 2
+        bg_img = bg_img.crop((bg_left, bg_top, bg_left + target_width, bg_top + target_height))
         
         # Apply a minimal Gaussian blur
         bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=5))
 
         if cur_ratio > target_ratio:
-            new_w = TARGET_W
-            new_h = int(TARGET_W / cur_ratio)
+            new_w = target_width
+            new_h = int(target_width / cur_ratio)
             img_resized = img.resize((new_w, new_h), Image.LANCZOS)
-            bg_img.paste(img_resized, (0, (TARGET_H - new_h) // 2))
-            return bg_img, True
+            bg_img.paste(img_resized, (0, (target_height - new_h) // 2))
+            return finish(bg_img, True, padding_geometry(0, (target_height-new_h)//2, new_w, new_h, target_width, target_height))
         else:
-            new_h = TARGET_H
-            new_w = int(TARGET_H * cur_ratio)
+            new_h = target_height
+            new_w = int(target_height * cur_ratio)
             img_resized = img.resize((new_w, new_h), Image.LANCZOS)
-            bg_img.paste(img_resized, ((TARGET_W - new_w) // 2, 0))
-            return bg_img, True
+            bg_img.paste(img_resized, ((target_width - new_w) // 2, 0))
+            return finish(bg_img, True, padding_geometry((target_width-new_w)//2, 0, new_w, new_h, target_width, target_height))
     else:
         # Standard resize after crop
-        return img_cropped.resize((TARGET_W, TARGET_H), Image.LANCZOS), False
+        return finish(img_cropped.resize((target_width, target_height), Image.LANCZOS), False)
 
 def main():
     import sys

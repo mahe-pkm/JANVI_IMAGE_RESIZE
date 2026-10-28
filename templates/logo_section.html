@@ -1,0 +1,65 @@
+<section id="sec-logo" class="content-section">
+    <header class="logo-editor-header">
+        <div><h1>Logo Placement</h1><p>Adjust the watermark on a preview, then apply it to your folder.</p></div>
+        <button class="btn btn-secondary btn-sm" id="logo-hardware-toggle" type="button" aria-expanded="false">Show hardware</button>
+    </header>
+    <details class="logo-folders" id="logo-folders">
+        <summary>Image and output folders <span id="logo-folder-summary">Choose folders</span></summary>
+        <div class="logo-fields">
+            <div class="input-group"><label for="logo-source">Resized images folder</label>
+                <div class="input-with-button"><input id="logo-source" type="text" placeholder="Choose the resized images folder"><button class="btn btn-secondary btn-sm" id="logo-browse-source" type="button">📁 Browse</button></div></div>
+            <div class="input-group"><label for="logo-destination">Output folder for images with logo</label>
+                <div class="input-with-button"><input id="logo-destination" type="text" placeholder="Choose a separate output folder"><button class="btn btn-secondary btn-sm" id="logo-browse-destination" type="button">📁 Browse</button></div></div>
+        </div>
+        <p class="monitor-note">Originals are preserved. Existing output files are skipped and the folder structure is retained.</p>
+    </details>
+    <div class="logo-workspace">
+        <div class="logo-visual">
+            <div class="logo-preview-toolbar">
+                <div class="input-group logo-image-picker"><label for="logo-image">Preview image</label><select id="logo-image"><option value="">Choose a source folder first</option></select></div>
+                <label class="logo-before-control"><input id="logo-show-before" type="checkbox"> Show original</label>
+            </div>
+            <div class="logo-stage" aria-label="Watermark preview">
+                <img id="logo-before" alt="Selected image before logo placement" hidden>
+                <img id="logo-after" alt="Preview with logo placement">
+                <p id="logo-empty-preview">Choose a folder and an image to see the preview.</p>
+            </div>
+            <div class="logo-visual-footer"><span id="logo-image-count"></span><span id="logo-message" class="logo-message" role="status">Choose a folder and preview image to begin.</span></div>
+        </div>
+        <aside class="logo-inspector" aria-label="Watermark controls">
+            <div class="logo-inspector-heading"><div><span class="logo-eyebrow">WATERMARK EDITOR</span><h2>Image options</h2></div></div>
+            <div class="input-group"><label for="logo-asset">Logo</label><select id="logo-asset"></select></div>
+            <div class="input-group logo-upload-group"><label for="logo-upload">Choose a PNG, JPG, or WebP logo</label><input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"><small>Up to 10 MB</small></div>
+            <div class="logo-divider"></div>
+            <h2>Watermark effects</h2>
+            <div class="logo-control"><label for="logo-opacity">Opacity <span>%</span></label><div><input id="logo-opacity-slider" aria-label="Opacity slider" type="range" min="0" max="100" step="0.1" value="88.1"><input id="logo-opacity" type="number" min="0" max="100" step="0.1" value="88.1"></div></div>
+            <div class="logo-control"><label for="logo-width">Size <span>% of image width</span></label>
+                <div class="logo-size-modes" role="radiogroup" aria-label="Logo size mode"><label><input type="radio" name="logo-size-mode" value="proportional" checked> Proportional</label><label><input type="radio" name="logo-size-mode" value="fit"> Fit</label><label><input type="radio" name="logo-size-mode" value="fill"> Fill</label></div>
+                <div><input id="logo-width-slider" aria-label="Logo size slider" type="range" min="1" max="60" step="0.5" value="15"><input id="logo-width" type="number" min="1" max="60" step="0.5" value="15"></div></div>
+            <div class="logo-divider"></div>
+            <h3>Inset</h3>
+            <div class="logo-control"><label for="logo-offset-x">Horizontal <span>%</span></label><div><input id="logo-offset-x-slider" aria-label="Horizontal inset slider" type="range" min="0" max="40" step="0.5" value="0"><input id="logo-offset-x" type="number" min="0" max="40" step="0.5" value="0"></div></div>
+            <div class="logo-control"><label for="logo-offset-y">Vertical <span>%</span></label><div><input id="logo-offset-y-slider" aria-label="Vertical inset slider" type="range" min="0" max="40" step="0.5" value="0"><input id="logo-offset-y" type="number" min="0" max="40" step="0.5" value="0"></div></div>
+            <div class="logo-divider"></div>
+            <div class="logo-position-controls">
+                <div><h3>Anchor</h3><input type="hidden" id="logo-position" value="top-left"><div class="anchor-grid" role="group" aria-label="Logo anchor position">
+                    <button type="button" data-anchor="top-left" aria-label="Top left" aria-pressed="true"></button><button type="button" data-anchor="top-center" aria-label="Top centre" aria-pressed="false"></button><button type="button" data-anchor="top-right" aria-label="Top right" aria-pressed="false"></button>
+                    <button type="button" data-anchor="middle-left" aria-label="Middle left" aria-pressed="false"></button><button type="button" data-anchor="middle-center" aria-label="Centre" aria-pressed="false"></button><button type="button" data-anchor="middle-right" aria-label="Middle right" aria-pressed="false"></button>
+                    <button type="button" data-anchor="bottom-left" aria-label="Bottom left" aria-pressed="false"></button><button type="button" data-anchor="bottom-center" aria-label="Bottom centre" aria-pressed="false"></button><button type="button" data-anchor="bottom-right" aria-label="Bottom right" aria-pressed="false"></button>
+                </div></div>
+                <div><h3>Rotate</h3><input type="hidden" id="logo-rotation" value="0"><div class="rotation-buttons"><button class="btn btn-secondary btn-sm" type="button" id="logo-rotate-left" aria-label="Rotate logo left 90 degrees">↶</button><button class="btn btn-secondary btn-sm" type="button" id="logo-rotate-right" aria-label="Rotate logo right 90 degrees">↷</button></div><small id="logo-rotation-label">0°</small></div>
+            </div>
+            <p class="logo-settings-note">Fit keeps the logo inside the image; Fill covers it and may crop the logo. Proportional size includes transparent margins. Centre insets move right or down.</p>
+        </aside>
+    </div>
+    <div class="card logo-card logo-batch-card">
+        <div class="logo-batch-heading"><div><span class="logo-eyebrow">BATCH PROCESSING</span><h2>Apply to your folder</h2></div><p>Review the preview above before applying the logo.</p></div>
+        <div class="logo-fields">
+            <div class="input-group"><label for="logo-presets">Saved presets</label><select id="logo-presets"><option value="">Choose a saved preset</option></select></div>
+            <div class="input-group"><label for="logo-preset-name">New preset name</label><div class="input-with-button"><input id="logo-preset-name" type="text" maxlength="80" placeholder="e.g. Janvi top left"><button class="btn btn-secondary btn-sm" id="logo-save-preset" type="button">Save preset</button></div></div>
+        </div>
+        <div class="logo-actions"><button class="btn btn-primary" id="logo-apply" type="button" disabled>Apply logo to folder</button><button class="btn btn-secondary" id="logo-use-export" type="button" disabled>Use output for Shopify export</button></div>
+        <p id="logo-output-note" class="monitor-note">Preview your placement before starting the batch.</p>
+        <details class="logo-job-details" open><summary>Processing log</summary><div id="logo-job-log" class="logo-job-log" role="log" aria-live="polite">No logo job has run in this session.</div><p id="logo-report-path" class="monitor-note"></p></details>
+    </div>
+</section>

@@ -1,0 +1,12 @@
+{
+  "name": "janvi-image-studio",
+  "productName": "Janvi Image Studio",
+  "version": "0.6.3",
+  "private": true,
+  "main": "main.js",
+  "description": "Desktop shell for Janvi Image Resize",
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.0.0"
+  }
+}

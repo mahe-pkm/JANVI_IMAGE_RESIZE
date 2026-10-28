@@ -1,0 +1,9 @@
+[package]
+name = "janvi-launcher"
+version = "0.2.0"
+edition = "2021"
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "s"

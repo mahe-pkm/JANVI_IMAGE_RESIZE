@@ -1,0 +1,8 @@
+.git
+.venv
+.runtime
+.build
+dist
+data
+wheels
+redist

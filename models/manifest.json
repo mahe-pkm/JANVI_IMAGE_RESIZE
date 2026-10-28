@@ -1,0 +1,9 @@
+{
+  "file": "yolov8n.onnx",
+  "sha256": "7c6c36049faa71711a452e6742ec72039c7953b718de6c3900c84d8718822f1f",
+  "source_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+  "input_size": 640,
+  "opset": 17,
+  "confidence": 0.5,
+  "iou": 0.7
+}

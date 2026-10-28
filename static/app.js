@@ -104,17 +104,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     let currentStatus = 'idle';
-    let loadedLogsCount = 0;
+    let loadedLogCursor = 0;
     
     // Directory Settings State
-    let rootDir = localStorage.getItem('root_dir') || 'c:\\Users\\rough\\Desktop\\Logo Processing\\May-20261\\Resizing';
-    let destDir = localStorage.getItem('dest_dir') || 'c:\\Users\\rough\\Desktop\\Logo Processing\\May-20261\\Re-sized';
+    let rootDir = localStorage.getItem('root_dir') || '';
+    let destDir = localStorage.getItem('dest_dir') || '';
     let isDefaultOutput = localStorage.getItem('use_default_output') !== 'false';
     let recentFolders = JSON.parse(localStorage.getItem('recent_folders') || '[]');
     
     // Shopify Export State
-    let exportSrc = localStorage.getItem('export_src') || 'c:\\Users\\rough\\Desktop\\Logo Processing\\May-20261\\Re-sized\\With Logo';
-    let exportDest = localStorage.getItem('export_dest') || 'c:\\Users\\rough\\Desktop\\Logo Processing\\May-20261\\Re-sized\\Final For Shopify';
+    let exportSrc = localStorage.getItem('export_src') || '';
+    let exportDest = localStorage.getItem('export_dest') || '';
     
     // Browser Modal State
     let activeBrowserTarget = 'root'; // 'root', 'dest', 'export_src', 'export_dest'
@@ -152,10 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sections = [
         { nav: navDash, sec: secDash },
         { nav: navPipe, sec: secPipe },
+        { nav: document.getElementById('nav-logo'), sec: document.getElementById('sec-logo') },
         { nav: navPad, sec: secPad }
     ];
 
     function showSection(targetSec) {
+        document.body.classList.toggle('logo-mode', targetSec.id === 'sec-logo');
         sections.forEach(item => {
             if (item.sec === targetSec) {
                 item.sec.classList.add('active');
@@ -169,10 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     navDash.addEventListener('click', (e) => { e.preventDefault(); showSection(secDash); });
     navPipe.addEventListener('click', (e) => { e.preventDefault(); showSection(secPipe); });
+    document.getElementById('nav-logo').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('sec-logo')); });
     navPad.addEventListener('click', (e) => { e.preventDefault(); showSection(secPad); });
 
     // Handle hash routing on load
-    if (window.location.hash === '#pipeline') showSection(secPipe);
+    if (window.location.hash === '#logo') showSection(document.getElementById('sec-logo'));
+    else if (window.location.hash === '#pipeline') showSection(secPipe);
     else if (window.location.hash === '#padded') showSection(secPad);
 
     // ----------------------------------------------------
@@ -223,6 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = rootDirInput.value.trim();
         rootDir = val;
         localStorage.setItem('root_dir', rootDir);
+        document.dispatchEvent(new Event('janvi-root-changed'));
         
         rootValidationBadge.className = 'status-badge status-checking';
         rootValidationBadge.textContent = 'Checking...';
@@ -289,14 +294,19 @@ document.addEventListener('DOMContentLoaded', () => {
             folderSelect.appendChild(opt);
             
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${folder.name}</strong></td>
-                <td>${folder.image_count} images</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm" onclick="triggerDirectAction('${folder.name}', 'audit')">Audit</button>
-                    <button class="btn btn-primary btn-sm" onclick="triggerDirectAction('${folder.name}', 'resize')">Resize</button>
-                </td>
-            `;
+            const nameCell = document.createElement('td');
+            nameCell.textContent = folder.name;
+            const countCell = document.createElement('td');
+            countCell.textContent = `${folder.image_count} images`;
+            const actionCell = document.createElement('td');
+            for (const [label, action] of [['Audit', 'audit'], ['Resize', 'resize']]) {
+                const button = document.createElement('button');
+                button.className = 'btn btn-secondary btn-sm';
+                button.textContent = label;
+                button.addEventListener('click', () => window.triggerDirectAction(folder.name, action));
+                actionCell.appendChild(button);
+            }
+            tr.append(nameCell, countCell, actionCell);
             foldersTableBody.appendChild(tr);
         });
         
@@ -325,77 +335,117 @@ document.addEventListener('DOMContentLoaded', () => {
         await validateAndReload();
     }
 
+    let comparisonItems = [], comparisonIndex = 0;
+    function renderReview() {
+        const item = comparisonItems[comparisonIndex], image = document.getElementById('review-image');
+        image.hidden = !item;
+        document.getElementById('review-empty').hidden = !!item;
+        document.getElementById('review-position').textContent = item ? `${comparisonIndex + 1} / ${comparisonItems.length}` : '0 / 0';
+        ['review-prev','review-next','review-full'].forEach(id => { document.getElementById(id).disabled = !item; });
+        document.getElementById('review-filename').textContent = item ? item.relative_path : 'Select a processed folder to begin';
+        if (item) { image.src = document.getElementById('review-before').checked ? item.src_url : item.resized_url; image.alt = item.relative_path; }
+        const zoom = document.getElementById('review-zoom').value;
+        image.style.maxHeight = zoom === 'fit' ? '100%' : 'none';
+        image.style.maxWidth = zoom === 'fit' ? '100%' : 'none';
+        image.style.width = zoom === 'fit' ? '' : `${image.naturalWidth * Number(zoom) / 100}px`;
+        document.querySelectorAll('#padded-gallery .gallery-item').forEach((card,index) => { card.classList.toggle('selected',index === comparisonIndex); card.setAttribute('aria-pressed',String(index === comparisonIndex)); });
+    }
+    function navigateReview(delta) { if (!comparisonItems.length) return; comparisonIndex = (comparisonIndex + delta + comparisonItems.length) % comparisonItems.length; renderReview(); }
+    document.getElementById('review-prev').addEventListener('click',()=>navigateReview(-1));
+    document.getElementById('review-next').addEventListener('click',()=>navigateReview(1));
+    document.getElementById('review-before').addEventListener('change',renderReview);
+    document.getElementById('review-zoom').addEventListener('change',renderReview);
+    document.getElementById('review-full').addEventListener('click',()=>{const item=comparisonItems[comparisonIndex];if(item)openComparisonModal(item.relative_path,item.src_url,item.resized_url);});
     async function loadPatchList() {
         try {
             const rootParam = encodeURIComponent(rootDirInput.value.trim());
             const destParam = encodeURIComponent(isDefaultOutput ? '' : destDirInput.value.trim());
             
-            const res = await fetch(`/api/patch-list?root_dir=${rootParam}&dest_dir=${destParam}`);
+            const res = await fetch(`/api/patch-list?root_dir=${rootParam}&dest_dir=${destParam}&all=${document.getElementById('gallery-all').checked ? '1' : '0'}`);
             const data = await res.json();
             
             if (data.error) throw new Error(data.error);
             
-            padBadge.textContent = data.items.length;
-            statsPaddedCount.textContent = data.items.length;
-            galleryCount.textContent = `Total: ${data.items.length} images requiring manual patching`;
+            comparisonItems = data.items;
+            comparisonIndex = Math.min(comparisonIndex, Math.max(0, data.items.length - 1));
+            padBadge.textContent = data.padded_count;
+            statsPaddedCount.textContent = data.padded_count;
+            galleryCount.textContent = `${data.items.length} images shown · ${data.padded_count} padded`;
             
             galleryGrid.innerHTML = '';
             
             if (data.items.length === 0) {
-                galleryGrid.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">No padded images recorded yet. All processed images fit the crop window!</div>';
+                galleryGrid.innerHTML = '<p class="monitor-note">No matching processed images. Try All images or check your output folder.</p>';
+                renderReview();
                 return;
             }
             
-            data.items.forEach(item => {
-                const parts = item.relative_path.split('\\');
+            data.items.forEach((item, index) => {
+                const parts = item.relative_path.split(/[\\/]/);
                 const filename = parts[parts.length - 1];
                 const folderName = parts.length > 2 ? parts[parts.length - 2] : '';
                 
-                const card = document.createElement('div');
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.title = filename;
                 card.className = 'gallery-item';
-                card.innerHTML = `
-                    <div class="gallery-preview">
-                        <img src="${item.resized_url}" alt="${filename}">
-                        <span class="gallery-tag">Padded Preview</span>
-                    </div>
-                    <div class="gallery-info">
-                        <h4>${filename}</h4>
-                        <p>${folderName}</p>
-                    </div>
-                `;
+                card.innerHTML = '<div class="gallery-preview"><img><span class="gallery-tag"></span></div><div class="gallery-info"><h4></h4><p></p></div>';
+                card.querySelector('img').src = item.resized_url;
+                card.querySelector('img').alt = filename;
+                card.querySelector('.gallery-tag').textContent = item.padded ? 'Padded' : 'Resized';
+                card.querySelector('h4').textContent = filename;
+                card.querySelector('p').textContent = folderName;
                 
-                card.querySelector('.gallery-preview').addEventListener('click', () => {
-                    openComparisonModal(filename, item.src_url, item.resized_url);
+                card.addEventListener('click', () => {
+                    comparisonIndex = index;
+                    renderReview();
                 });
                 
                 galleryGrid.appendChild(card);
             });
+            renderReview();
             
         } catch (err) {
             console.error("Error loading patch list:", err);
             appendLog(`[System Error] Failed to load padded patch list: ${err.message}`, 'error');
         }
     }
+    document.getElementById('gallery-all').addEventListener('change', loadPatchList);
+    document.addEventListener('keydown', event => {
+        if (!secPad.classList.contains('active') || imageModal.classList.contains('active') || /INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) return;
+        if (event.key === 'ArrowLeft') { event.preventDefault(); navigateReview(-1); }
+        if (event.key === 'ArrowRight') { event.preventDefault(); navigateReview(1); }
+    });
 
     // ----------------------------------------------------
     // Directory Browser Logic
     // ----------------------------------------------------
     async function handleBrowseNative(target) {
         let currentVal = '';
-        if (target === 'root') currentVal = rootDirInput.value.trim();
+        if (target === 'logo_source') currentVal = document.getElementById('logo-source').value.trim();
+        else if (target === 'logo_destination') currentVal = document.getElementById('logo-destination').value.trim();
+        else if (target === 'root') currentVal = rootDirInput.value.trim();
         else if (target === 'dest') currentVal = destDirInput.value.trim();
         else if (target === 'export_src') currentVal = exportSrcInput.value.trim();
         else if (target === 'export_dest') currentVal = exportDestInput.value.trim();
         
         try {
-            const queryParam = encodeURIComponent(currentVal);
-            const res = await fetch(`/api/select-folder?initial_dir=${queryParam}`);
-            const data = await res.json();
+            let data;
+            if (window.JanviDesktop) {
+                data = await window.JanviDesktop.selectFolder(currentVal);
+            } else {
+                const res = await fetch('/api/select-folder', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({initial_dir: currentVal})});
+                data = await res.json();
+            }
             
             if (data.error) throw new Error(data.error);
             
             if (data.selected_path) {
-                if (target === 'root') {
+                if (target === 'logo_source' || target === 'logo_destination') {
+                    const input = document.getElementById(target === 'logo_source' ? 'logo-source' : 'logo-destination');
+                    input.value = data.selected_path;
+                    input.dispatchEvent(new Event('change', {bubbles: true}));
+                } else if (target === 'root') {
                     rootDirInput.value = data.selected_path;
                     validateAndReload();
                 } else if (target === 'dest') {
@@ -407,23 +457,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     exportSrcInput.value = data.selected_path;
                     exportSrc = data.selected_path;
                     localStorage.setItem('export_src', exportSrc);
+                    exportSrcInput.dispatchEvent(new Event('change', {bubbles: true}));
                 } else if (target === 'export_dest') {
                     exportDestInput.value = data.selected_path;
                     exportDest = data.selected_path;
                     localStorage.setItem('export_dest', exportDest);
+                    exportDestInput.dispatchEvent(new Event('change', {bubbles: true}));
                 }
             }
         } catch (err) {
             console.error("Native browse error:", err);
-            // Fallback to custom browser modal if native dialog fails
-            openDirectoryBrowser(target);
+            alert(err.message || 'Could not open the system folder picker. Enter the folder path manually.');
         }
     }
 
     async function openDirectoryBrowser(target) {
         activeBrowserTarget = target;
         let currentVal = '';
-        if (target === 'root') currentVal = rootDirInput.value.trim();
+        if (target === 'logo_source') currentVal = document.getElementById('logo-source').value.trim();
+        else if (target === 'logo_destination') currentVal = document.getElementById('logo-destination').value.trim();
+        else if (target === 'root') currentVal = rootDirInput.value.trim();
         else if (target === 'dest') currentVal = destDirInput.value.trim();
         else if (target === 'export_src') currentVal = exportSrcInput.value.trim();
         else if (target === 'export_dest') currentVal = exportDestInput.value.trim();
@@ -489,6 +542,30 @@ document.addEventListener('DOMContentLoaded', () => {
     btnBrowseDest.addEventListener('click', () => handleBrowseNative('dest'));
     btnBrowseExportSrc.addEventListener('click', () => handleBrowseNative('export_src'));
     btnBrowseExportDest.addEventListener('click', () => handleBrowseNative('export_dest'));
+    window.JanviBrowse = handleBrowseNative;
+    if (window.JanviDesktop) {
+        ['root-dir-input', 'dest-dir-input', 'export-src-input', 'export-dest-input', 'logo-source', 'logo-destination'].forEach(id => {
+            const field = document.getElementById(id), zone = field?.closest('.input-with-button');
+            if (!zone) return;
+            zone.classList.add('folder-drop-zone');
+            zone.title = 'Drop a folder here or use Browse';
+            const hint = document.createElement('small');
+            hint.className = 'folder-drop-hint'; hint.textContent = 'Or drag a folder here from File Explorer.';
+            zone.insertAdjacentElement('afterend', hint);
+            zone.addEventListener('dragover', event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; zone.classList.add('drag-active'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('drag-active'));
+            zone.addEventListener('drop', async event => {
+                event.preventDefault(); zone.classList.remove('drag-active');
+                if (field.disabled) return;
+                if (event.dataTransfer.files.length !== 1) { alert('Drop one folder.'); return; }
+                try {
+                    field.value = await window.JanviDesktop.validateDroppedFolder(event.dataTransfer.files[0]);
+                    field.dispatchEvent(new Event('input', {bubbles: true}));
+                    field.dispatchEvent(new Event('change', {bubbles: true}));
+                } catch (error) { alert(error.message || 'Drop one existing folder.'); }
+            });
+        });
+    }
     
     btnBrowserUp.addEventListener('click', () => {
         const parentPath = btnBrowserUp.dataset.parent;
@@ -496,7 +573,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     btnBrowserConfirm.addEventListener('click', () => {
-        if (activeBrowserTarget === 'root') {
+        if (activeBrowserTarget === 'logo_source' || activeBrowserTarget === 'logo_destination') {
+            const input = document.getElementById(activeBrowserTarget === 'logo_source' ? 'logo-source' : 'logo-destination');
+            input.value = currentBrowsePath;
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+        } else if (activeBrowserTarget === 'root') {
             rootDirInput.value = currentBrowsePath;
             validateAndReload();
         } else if (activeBrowserTarget === 'dest') {
@@ -534,6 +615,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Append folder paths dynamically to payload
             payload.root_dir = rootDirInput.value.trim();
             payload.dest_dir = isDefaultOutput ? '' : destDirInput.value.trim();
+            payload.device_id = window.JanviMonitor.selectedDevice();
+            if (endpoint === 'resize' || endpoint === 'analyze') {
+                payload.target_width = Number(document.getElementById('target-width').value);
+                payload.target_height = Number(document.getElementById('target-height').value);
+            }
             
             const res = await fetch(`/api/${endpoint}`, {
                 method: 'POST',
@@ -545,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             appendLog(`[System] ${data.message}`);
             showSection(secPipe);
+            await pollStatus();
         } catch (err) {
             alert(`Failed to start task: ${err.message}`);
             appendLog(`[System Error] Failed to start operation: ${err.message}`, 'error');
@@ -561,12 +648,59 @@ document.addEventListener('DOMContentLoaded', () => {
         startTask('resize', { folder });
     });
 
-    btnExport.addEventListener('click', () => {
-        if (confirm("This will copy and rename the files from 'Untitled Export' to the Shopify output folder. Continue?")) {
-            const export_src = exportSrcInput.value.trim();
-            const export_dest = exportDestInput.value.trim();
-            startTask('export', { export_src, export_dest });
+    const exportMode = document.getElementById('export-mode');
+    const exportSummary = document.getElementById('export-preview-summary');
+    const exportDetails = document.getElementById('export-preview-details');
+    const exportList = document.getElementById('export-preview-list');
+    let reviewedExport = '', exportSignature = '', previewSerial = 0;
+    const exportPayload = () => ({export_src: exportSrcInput.value.trim(), export_dest: exportDestInput.value.trim(), mode: exportMode.value});
+    function invalidateExportPreview() {
+        previewSerial++; reviewedExport = ''; exportSignature = ''; exportDetails.hidden = true;
+        exportSummary.textContent = 'Choose folders and preview before exporting.';
+    }
+    [exportSrcInput, exportDestInput].forEach(field => {
+        field.addEventListener('input', invalidateExportPreview);
+        field.addEventListener('change', invalidateExportPreview);
+    });
+    exportMode.addEventListener('change', () => {
+        invalidateExportPreview();
+        document.getElementById('export-mode-help').textContent = exportMode.value === 'lightroom'
+            ? 'Only images directly inside Untitled Export folders are included; they go into their parent product folder.'
+            : 'All supported images in the selected logo output are included. Untitled Export images go into their parent folder.';
+    });
+    document.getElementById('export-preview-button').addEventListener('click', async () => {
+        const payload = exportPayload(), snapshot = JSON.stringify(payload), serial = ++previewSerial;
+        reviewedExport = ''; exportDetails.hidden = true; exportSummary.textContent = 'Scanning images…';
+        try {
+            const response = await fetch('/api/export/preview', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: snapshot});
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Could not preview export.');
+            if (serial !== previewSerial || snapshot !== JSON.stringify(exportPayload())) return;
+            exportSummary.textContent = `${data.total} images · ${data.copy} to copy · ${data.already_present} already present · ${data.conflicts} conflicts`;
+            exportList.replaceChildren();
+            data.entries.forEach(entry => {
+                const row = document.createElement('div');
+                row.textContent = `${entry.source} → ${entry.output} (${entry.status.replaceAll('_', ' ')})`;
+                exportList.append(row);
+            });
+            if (data.total > data.entries.length) {
+                const note = document.createElement('div'); note.textContent = `Showing first ${data.entries.length} of ${data.total} images.`; exportList.append(note);
+            }
+            exportDetails.hidden = !data.total;
+            if (data.total) { reviewedExport = snapshot; exportSignature = data.signature; }
+            else exportSummary.textContent += ' · No eligible images found.';
+        } catch (error) {
+            if (serial === previewSerial) exportSummary.textContent = error.message;
         }
+    });
+    btnExport.addEventListener('click', () => {
+        const payload = exportPayload();
+        if (!reviewedExport || reviewedExport !== JSON.stringify(payload)) {
+            exportSummary.textContent = 'Preview the selected folders before exporting.';
+            return;
+        }
+        reviewedExport = '';
+        startTask('export', {...payload, signature: exportSignature});
     });
 
     btnCancel.addEventListener('click', async () => {
@@ -611,7 +745,18 @@ document.addEventListener('DOMContentLoaded', () => {
         modalImgOrig.src = origUrl;
         modalImgResized.src = resizedUrl;
         imageModal.classList.add('active');
+        document.getElementById('modal-count').textContent = `${comparisonIndex + 1} / ${comparisonItems.length}`;
     }
+
+    function moveComparison(delta) {
+        if (!comparisonItems.length) return;
+        comparisonIndex = (comparisonIndex + delta + comparisonItems.length) % comparisonItems.length;
+        const item = comparisonItems[comparisonIndex];
+        openComparisonModal(item.relative_path.split(/[\\/]/).pop(), item.src_url, item.resized_url);
+    }
+    document.getElementById('modal-prev').addEventListener('click', () => moveComparison(-1));
+    document.getElementById('modal-next').addEventListener('click', () => moveComparison(1));
+    document.addEventListener('keydown', event => { if (!imageModal.classList.contains('active')) return; if (event.key === 'ArrowLeft') moveComparison(-1); if (event.key === 'ArrowRight') moveComparison(1); if (event.key === 'Escape') closeModal(); });
 
     function closeModal() {
         imageModal.classList.remove('active');
@@ -627,60 +772,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------------------------------------------------
     // Task Status Polling Loop
     // ----------------------------------------------------
+    let statusPolling = false;
     async function pollStatus() {
+        if (statusPolling) return;
+        statusPolling = true;
         try {
-            const res = await fetch('/api/status');
+            const res = await fetch(`/api/status?after=${loadedLogCursor}`, {cache: 'no-store'});
+            if (!res.ok) throw new Error('Status unavailable');
             const data = await res.json();
-            
-            // Check status change transitions to reload data
-            if (currentStatus === 'running' && data.status !== 'running') {
-                // Task has ended
+            if (['running', 'cancelling'].includes(currentStatus) && !data.active) {
                 validateAndReload();
                 loadPatchList();
             }
             currentStatus = data.status;
-
-            if (data.status === 'running') {
-                systemDot.className = 'dot running';
-                let taskLabel = data.task_type.toUpperCase();
-                systemStatusText.textContent = `Running ${taskLabel}...`;
-                activeTaskCard.classList.remove('hidden');
-                
-                taskTitle.textContent = `Running ${data.task_type === 'audit' ? 'Padding Audit' : data.task_type === 'resize' ? 'Subject-Aware Resizing' : 'Shopify Exporter'}...`;
-                taskFilename.textContent = data.current_file ? `File: ${data.current_file}` : 'Starting task...';
-                
-                taskProgressBar.style.width = `${data.progress}%`;
-                taskProgressText.textContent = `${data.progress}% Completed`;
-                taskCountText.textContent = `${data.current} / ${data.total} processed`;
-                
-                btnCancel.disabled = false;
-            } else {
-                systemDot.className = 'dot idle';
-                systemStatusText.textContent = 'System Idle';
-                activeTaskCard.classList.add('hidden');
+            window.JanviMonitor.renderJob(data);
+            document.dispatchEvent(new CustomEvent('janvi-job-status', {detail: data}));
+            systemDot.className = data.active ? 'dot running' : 'dot idle';
+            systemStatusText.textContent = data.active ? data.phase : data.status.replaceAll('_', ' ');
+            for (const event of data.events || []) {
+                appendLog(event.message, event.message.includes('ERROR') ? 'error' : '');
             }
-
-            // Sync logs
-            if (data.logs.length > 0) {
-                if (data.logs.length < loadedLogsCount) {
-                    loadedLogsCount = 0;
-                }
-                
-                for (let i = loadedLogsCount; i < data.logs.length; i++) {
-                    const line = data.logs[i];
-                    let logType = '';
-                    if (line.includes('ERROR') || line.includes('Failed')) logType = 'error';
-                    else if (line.includes('Complete') || line.includes('Success')) logType = 'system';
-                    
-                    appendLog(line, logType);
-                }
-                loadedLogsCount = data.logs.length;
-            } else {
-                loadedLogsCount = 0;
-            }
-
+            loadedLogCursor = data.log_cursor;
         } catch (err) {
-            console.error("Status polling error:", err);
+            systemStatusText.textContent = 'Connection interrupted · reconnecting';
+        } finally {
+            statusPolling = false;
         }
     }
 
@@ -689,6 +805,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/active-directory');
             const data = await res.json();
+            // A connected workflow owns its paths; older server job directories
+            // must not replace the user's saved setup on a refresh.
+            let workflow;
+            try { workflow = JSON.parse(localStorage.getItem('janvi_workflow') || '{}'); } catch (_) { workflow = {}; }
+            if (workflow.linked && workflow.source) {
+                data.root_dir = workflow.source;
+            }
             if (data.root_dir) {
                 rootDir = data.root_dir;
                 localStorage.setItem('root_dir', rootDir);
@@ -720,6 +843,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     destDirGroup.classList.remove('hidden');
                 }
             }
+            exportSrcInput.value = exportSrc || data.export_src || '';
+            exportDestInput.value = exportDest || data.export_dest || '';
             await validateAndReload();
             await loadPatchList();
         } catch (err) {
@@ -731,6 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Init & Loop
     updateRecentFoldersDropdown();
-    syncActiveDirectories();
+    syncActiveDirectories().finally(() => document.dispatchEvent(new Event('janvi-directories-ready')));
+    pollStatus();
     setInterval(pollStatus, 1000);
 });

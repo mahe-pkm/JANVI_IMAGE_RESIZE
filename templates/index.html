@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subject-Aware Logo Processor Dashboard</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Janvi Studio — Image Processing</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="/static/studio-icon.png" type="image/png">
+    <link rel="stylesheet" href="/static/studio.css">
 </head>
 <body>
     <div class="app-container">
@@ -16,8 +14,8 @@
         <aside class="sidebar">
             <div class="brand">
                 <div class="brand-title">
-                    <span class="brand-icon">✨</span>
-                    <h2>LogoProcessor</h2>
+                    <img class="studio-brand-icon" src="/static/studio-icon.png" alt="">
+                    <div class="brand-copy"><h2>JANVI</h2><span>IMAGE STUDIO</span></div>
                 </div>
                 <button id="theme-toggle" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
                     <span class="theme-toggle-icon">🌙</span>
@@ -25,15 +23,43 @@
             </div>
             <nav class="nav-menu">
                 <a href="#dashboard" class="nav-item active" id="nav-dash">
-                    <span class="nav-icon">📊</span> Dashboard
+                    <span class="nav-icon" aria-hidden="true">▦</span> Dashboard
                 </a>
                 <a href="#pipeline" class="nav-item" id="nav-pipe">
-                    <span class="nav-icon">⚡</span> Run Pipeline
+                    <span class="nav-icon" aria-hidden="true">◇</span> Image Workflow
+                </a>
+                <a href="#logo" class="nav-item" id="nav-logo">
+                    <span class="nav-icon" aria-hidden="true">◉</span> Logo Placement
                 </a>
                 <a href="#padded" class="nav-item" id="nav-pad">
-                    <span class="nav-icon">🖼️</span> Padded Images <span class="badge" id="pad-badge">0</span>
+                    <span class="nav-icon" aria-hidden="true">▣</span> Review &amp; Repair <span class="badge" id="pad-badge">0</span>
                 </a>
             </nav>
+            <details class="sidebar-usage" open>
+                <summary>System usage</summary>
+                <div class="usage-widgets">
+                    <section class="usage-widget" aria-label="CPU usage">
+                        <div class="usage-heading"><span>CPU</span><strong id="metric-cpu">Sampling…</strong></div>
+                        <meter id="usage-cpu" min="0" max="100" value="0" aria-label="System CPU usage" hidden></meter>
+                        <small id="metric-app-cpu">App —</small>
+                    </section>
+                    <section class="usage-widget" aria-label="Memory usage">
+                        <div class="usage-heading"><span>Memory</span></div>
+                        <strong id="metric-ram">Sampling…</strong>
+                        <meter id="usage-ram" min="0" max="100" value="0" aria-label="System memory usage" hidden></meter>
+                        <small id="metric-app-ram">App —</small>
+                    </section>
+                    <button type="button" id="usage-gpu-settings" class="usage-widget usage-gpu" aria-label="GPU usage and processing settings" aria-expanded="false">
+                        <span class="usage-heading"><span>GPU</span><strong id="metric-gpu">CPU selected</strong></span>
+                        <span id="metric-gpu-name" class="usage-adapter">CPU processing</span>
+                        <meter id="usage-gpu" min="0" max="100" value="0" aria-label="Selected GPU total adapter usage" hidden></meter>
+                        <small>Dedicated <span id="metric-vram">—</span></small>
+                        <small id="metric-shared">Shared —</small>
+                        <small class="usage-settings-hint">Processing settings ↗</small>
+                    </button>
+                    <p class="usage-note">System-wide readings. GPU shows total adapter use.</p>
+                </div>
+            </details>
             <div class="sidebar-footer">
                 <div class="status-indicator">
                     <span class="dot idle" id="system-dot"></span>
@@ -44,6 +70,48 @@
 
         <!-- Main Content Area -->
         <main class="main-content">
+            <nav id="workflow-steps" class="workflow-steps" aria-label="Workflow steps" hidden>
+                <button type="button" data-step="setup">1. Folders</button>
+                <button type="button" data-step="resize">2. Crop &amp; Resize</button>
+                <button type="button" data-step="review">3. Photoshop</button>
+                <button type="button" data-step="logo">4. Logo</button>
+                <button type="button" data-step="export">5. Export</button>
+            </nav>
+            <div class="monitor-panel" aria-label="Processing status">
+                <div class="card device-card">
+                    <div class="monitor-heading"><h2>Processing method</h2><button class="btn btn-secondary btn-sm" id="refresh-devices">Refresh hardware</button></div>
+                    <div class="device-methods" role="group" aria-label="Processing method">
+                        <button class="method active" data-method="cpu" aria-pressed="true">CPU</button>
+                        <button class="method" data-method="integrated" aria-pressed="false">Integrated GPU</button>
+                        <button class="method" data-method="dedicated" aria-pressed="false">Dedicated GPU</button>
+                    </div>
+                    <label for="device-select">Device</label>
+                    <select id="device-select"><option value="cpu">CPU · Detecting hardware…</option></select>
+                    <p id="device-detail" class="monitor-note">Checking available processing devices…</p>
+                    <p class="monitor-note">GPU mode accelerates subject detection. Image preparation, saving and export use the CPU. GPU readings show total adapter use.</p>
+                </div>
+                <!-- Background Task Progress Card -->
+                <div class="card progress-card" id="active-task-card">
+                    <div class="progress-header">
+                        <div>
+                            <h2 id="task-title">Ready to process</h2>
+                            <p id="task-filename">Choose a folder and processing method</p>
+                        </div>
+                        <button class="btn btn-danger btn-sm" id="btn-cancel" disabled>Cancel Task</button>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="task-progress-bar" role="progressbar" aria-label="Job progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width: 0%;"></div>
+                    </div>
+                    <div class="progress-footer">
+                        <span id="task-progress-text">No active job</span>
+                        <span id="task-count-text">0 / 0 images</span>
+                    </div>
+                    <p id="task-timing" class="monitor-note" aria-live="polite">Elapsed — · Speed — · Remaining —</p>
+                    <p id="task-result" class="monitor-note"></p>
+                </div>
+
+            </div>
+
             <!-- Section: Dashboard -->
             <section id="sec-dashboard" class="content-section active">
                 <header class="section-header">
@@ -110,7 +178,15 @@
                 <div class="pipeline-controls">
                     <!-- Directory Settings Card -->
                     <div class="card settings-card">
-                        <h2>📁 Directory Configuration</h2>
+                        <h2>1. Choose your folders</h2>
+                        <label class="checkbox-label"><input id="workflow-linked" type="checkbox"> Use connected workflow folders</label>
+                        <p class="monitor-note">Choose the input once. Resize, logo and export reuse the paths below.</p>
+                        <div id="workflow-settings" hidden>
+                            <div class="workflow-options" role="group" aria-label="Processing stages"><label><input id="workflow-do-resize" type="checkbox" checked> Resize images</label><label><input id="workflow-do-logo" type="checkbox" checked> Add logo</label><label><input id="workflow-do-export" type="checkbox" checked> Shopify export</label></div>
+                            <label for="workflow-output">Output location</label>
+                            <div class="input-with-button"><input id="workflow-output" type="text" placeholder="Defaults to a separate folder beside your input"><button id="workflow-browse" type="button" class="btn btn-secondary btn-sm">Browse</button></div>
+                            <p id="workflow-paths" class="monitor-note" role="status"></p>
+                        </div>
                         <div class="settings-grid">
                             <div class="input-group">
                                 <label for="root-dir-input">
@@ -118,7 +194,7 @@
                                     <span id="root-validation-badge" class="status-badge status-checking">Checking...</span>
                                 </label>
                                 <div class="input-with-button">
-                                    <input type="text" id="root-dir-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Resizing">
+                                    <input type="text" id="root-dir-input" placeholder="Choose a folder…">
                                     <button class="btn btn-secondary btn-sm" id="btn-browse-root">📁 Browse</button>
                                 </div>
                             </div>
@@ -137,7 +213,7 @@
                             <div class="input-group full-width hidden" id="dest-dir-group">
                                 <label for="dest-dir-input">Output Destination Folder</label>
                                 <div class="input-with-button">
-                                    <input type="text" id="dest-dir-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Re-sized">
+                                    <input type="text" id="dest-dir-input" placeholder="Choose a folder…">
                                     <button class="btn btn-secondary btn-sm" id="btn-browse-dest">📁 Browse</button>
                                 </div>
                             </div>
@@ -147,22 +223,27 @@
                     <!-- Shopify Export Settings Card -->
                     <div class="card settings-card" id="shopify-export-settings">
                         <h2>📦 Shopify Export Configuration</h2>
+                        <p class="monitor-note">Review the image list before export. Source files are preserved.</p>
+                        <div class="input-group export-mode"><label for="export-mode">Image source</label><select id="export-mode"><option value="lightroom">Lightroom — images inside Untitled Export</option><option value="native">Native app — images in selected logo output</option></select></div>
                         <div class="settings-grid">
                             <div class="input-group">
-                                <label for="export-src-input">Source Export Folder (contains 'Untitled Export' subfolders)</label>
+                                <label for="export-src-input">Source image folder</label>
                                 <div class="input-with-button">
-                                    <input type="text" id="export-src-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Re-sized\With Logo">
+                                    <input type="text" id="export-src-input" placeholder="Choose a folder…">
                                     <button class="btn btn-secondary btn-sm" id="btn-browse-export-src">📁 Browse</button>
                                 </div>
                             </div>
                             <div class="input-group">
                                 <label for="export-dest-input">Shopify Output Folder (Final For Shopify)</label>
                                 <div class="input-with-button">
-                                    <input type="text" id="export-dest-input" placeholder="c:\Users\rough\Desktop\Logo Processing\May-20261\Re-sized\Final For Shopify">
+                                    <input type="text" id="export-dest-input" placeholder="Choose a folder…">
                                     <button class="btn btn-secondary btn-sm" id="btn-browse-export-dest">📁 Browse</button>
                                 </div>
                             </div>
                         </div>
+                        <p id="export-mode-help" class="monitor-note">Only images directly inside Untitled Export folders are included; they go into their parent product folder.</p>
+                        <div class="export-preview-actions"><button class="btn btn-secondary btn-sm" type="button" id="export-preview-button">Preview export</button><span id="export-preview-summary" role="status">Choose folders and preview before exporting.</span></div>
+                        <details id="export-preview-details" hidden><summary>Show file mapping</summary><div id="export-preview-list" class="export-preview-list"></div></details>
                     </div>
 
                     <!-- Operations Card -->
@@ -178,28 +259,12 @@
                             </div>
                             <div class="button-group">
                                 <button class="btn btn-secondary" id="btn-audit">🔍 Analyze Padding</button>
+                                <p class="monitor-note">Images matching the selected ratio keep their composition. Other images are subject-aware cropped or padded; review padding before adding the logo.</p>
+                                <div class="size-controls"><div><label for="size-preset">Output size</label><select id="size-preset"><option value="1200x1800">2:3 · 1200 × 1800 (default)</option><option value="1000x1500">2:3 · 1000 × 1500</option><option value="1200x1200">1:1 · 1200 × 1200</option><option value="1200x1500">4:5 · 1200 × 1500</option><option value="custom">Custom</option></select></div><div><label for="target-width">Width (px)</label><input id="target-width" type="number" min="64" max="6000" value="1200"></div><div><label for="target-height">Height (px)</label><input id="target-height" type="number" min="64" max="6000" value="1800"></div><span id="size-ratio" class="monitor-note"></span></div>
                                 <button class="btn btn-primary" id="btn-resize">⚡ Run Resizing</button>
                                 <button class="btn btn-accent" id="btn-export">📦 Export to Shopify</button>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Background Task Progress Card -->
-                <div class="card progress-card hidden" id="active-task-card">
-                    <div class="progress-header">
-                        <div>
-                            <h2 id="task-title">Running Resizing...</h2>
-                            <p id="task-filename">Processing: image.png</p>
-                        </div>
-                        <button class="btn btn-danger btn-sm" id="btn-cancel">Cancel Task</button>
-                    </div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="task-progress-bar" style="width: 0%;"></div>
-                    </div>
-                    <div class="progress-footer">
-                        <span id="task-progress-text">0% Completed</span>
-                        <span id="task-count-text">0 / 0 images</span>
                     </div>
                 </div>
 
@@ -215,26 +280,42 @@
                 </div>
             </section>
 
+            {% include "logo_section.html" %}
+
             <!-- Section: Padded Images Gallery -->
             <section id="sec-padded" class="content-section">
                 <header class="section-header">
                     <div>
-                        <h1>Padded Images Queue</h1>
-                        <p>Review the list of images that were padded with blurred margins to prevent subject crop. Use these for outpainting verification.</p>
+                        <h1>Review &amp; repair</h1>
+                        <p>Check the framing, repair padding, then continue to your logo.</p>
                     </div>
                 </header>
 
+                <div class="review-layout">
+                <div class="card photoshop-repair-card">
+                    <h2>Repair padding in Photoshop</h2>
+                    <p class="monitor-note">Close other Photoshop documents. Repair processes one image at a time. If Photoshop asks to run the script, choose Yes. Review the result before adding your logo.</p>
+                    <p id="photoshop-repair-status" role="status">Checking the generated script…</p>
+                    <p id="photoshop-repair-path" class="monitor-note"></p>
+                    <div class="button-group"><button id="photoshop-start" class="btn btn-primary" type="button" hidden>Open Photoshop &amp; Repair</button><a id="photoshop-script-download" class="btn btn-secondary" hidden>Download JSX</a><button id="photoshop-refresh" class="btn btn-secondary" type="button">Refresh Photoshop status</button></div>
+                    <ul id="photoshop-errors"></ul>
+                </div>
                 <div class="card gallery-card">
+                    <div class="review-stage" id="review-stage"><img id="review-image" alt="Selected image preview" hidden><p id="review-empty">Your processed images will appear here.</p></div>
+                    <div class="review-toolbar"><button type="button" class="btn btn-secondary" id="review-prev" aria-label="Previous image">←</button><span id="review-position" role="status">0 / 0</span><button type="button" class="btn btn-secondary" id="review-next" aria-label="Next image">→</button><label class="review-before"><input type="checkbox" id="review-before"> Original</label><label for="review-zoom" class="sr-only">Preview zoom</label><select id="review-zoom"><option value="fit">Fit</option><option value="100">100%</option><option value="150">150%</option></select><button type="button" class="btn btn-secondary" id="review-full">Full view</button></div>
+                    <p id="review-filename" class="monitor-note">Select an image below</p>
                     <div class="gallery-controls">
-                        <h2>Image Comparison Queue</h2>
                         <p class="subtitle" id="gallery-count">Total: 0 images requiring manual patching</p>
+                        <label><input type="checkbox" id="gallery-all" checked> All images</label>
                     </div>
 
                     <div class="gallery-grid" id="padded-gallery">
                         <!-- Dynamic items -->
                     </div>
                 </div>
+                </div>
             </section>
+            <div id="workflow-footer" hidden><p id="workflow-context" class="monitor-note"></p><button id="workflow-next" class="btn btn-primary" type="button">Continue</button></div>
         </main>
     </div>
 
@@ -243,6 +324,7 @@
         <div class="modal-content">
             <span class="close-btn" id="modal-close">&times;</span>
             <h2 id="modal-title">Comparison</h2>
+            <div class="button-group"><button type="button" id="modal-prev" class="btn btn-secondary">← Previous</button><span id="modal-count" role="status"></span><button type="button" id="modal-next" class="btn btn-secondary">Next →</button></div>
             <div class="comparison-container">
                 <div class="comp-box">
                     <h3>Original</h3>
@@ -280,6 +362,9 @@
         </div>
     </div>
 
+    <script src="/static/monitor.js"></script>
     <script src="/static/app.js"></script>
+    <script src="/static/logo.js"></script>
+    <script src="/static/workflow.js"></script>
 </body>
 </html>

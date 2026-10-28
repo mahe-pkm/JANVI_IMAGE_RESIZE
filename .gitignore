@@ -9,3 +9,28 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+.runtime/
+.build/
+dist/
+data/
+wheels/
+redist/
+runtime-python.zip
+launcher/target/
+desktop/node_modules/
+.wix/
+
+# Local settings and generated image reports (existing local copies stay on disk).
+/active_dirs.json
+/manual_patch_list.md
+/image_aspect_resolution_report.md
+/regen_ratio_changes.md
+/resized_ratio_report.md
+/source_ratio_difference_report.md
+/source_ratio_report.md
+/workspace_image_ratio_report.md
+/logo_finalized  copy.png
+/runs/
+.env
+.env.*
+!.env.example

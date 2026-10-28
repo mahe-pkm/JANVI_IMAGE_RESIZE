@@ -1,356 +1,138 @@
 from flask import Flask, jsonify, request, send_file, render_template, abort
 from pathlib import Path
-import threading
-import time
-import shutil
-import urllib.parse
-from PIL import Image
-
-app = Flask(__name__, template_folder='templates', static_folder='static')
-
-import os
 import json
+import os
+import subprocess
+import threading
+import urllib.parse
+import io
+from jobs import Jobs
+from photoshop_repair import repair_status, SCRIPT
+from processing import images_under, run_images, run_export, export_plan, export_signature, validate_paths
+from logo_processing import (DEFAULTS, asset_path, list_assets, list_presets, read_logo,
+                             render, run_logo, save_asset, save_preset, settings_for, source_image)
+from hardware import inventory
+from telemetry import Telemetry
 
-BASE_DIR = Path(os.environ.get("BASE_DIR", Path(__file__).resolve().parent))
+APP_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(os.environ.get("BASE_DIR", APP_DIR / "data")).resolve()
+BASE_DIR.mkdir(parents=True, exist_ok=True)
 SRC_DIR = BASE_DIR / "Resizing"
 DEST_DIR = BASE_DIR / "Re-sized"
-FINAL_DIR = DEST_DIR / "Final For Shopify"
-
-# Ensure directories exist
-SRC_DIR.mkdir(parents=True, exist_ok=True)
-DEST_DIR.mkdir(parents=True, exist_ok=True)
-
+SRC_DIR.mkdir(exist_ok=True)
+DEST_DIR.mkdir(exist_ok=True)
 ACTIVE_DIRS_FILE = BASE_DIR / "active_dirs.json"
+app = Flask(__name__, template_folder=str(APP_DIR / "templates"), static_folder=str(APP_DIR / "static"))
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
+jobs = Jobs(BASE_DIR / 'job-logs')
+status_lock = jobs.lock
+telemetry = Telemetry()
+logo_store_lock = threading.Lock()
+folder_picker_lock = threading.Lock()
+last_root_dir, last_dest_dir = str(SRC_DIR), str(DEST_DIR)
+try:
+    saved = json.loads(ACTIVE_DIRS_FILE.read_text(encoding="utf-8"))
+    if Path(saved.get("root_dir", "")).is_dir():
+        last_root_dir = saved["root_dir"]
+        last_dest_dir = saved.get("dest_dir", str(DEST_DIR))
+except (OSError, ValueError):
+    pass
 
-def load_active_dirs():
+@app.before_request
+def local_mutations_only():
+    if request.method == "POST":
+        origin = request.headers.get("Origin")
+        if origin and origin != request.host_url.rstrip("/"):
+            abort(403, "Only the local dashboard can start operations.")
+
+@app.get("/api/health")
+def health():
+    return jsonify({"app": "janvi-image-resize", "version": "0.2.0", "ready": True})
+
+@app.get("/api/devices")
+def devices():
+    return jsonify({"devices": inventory()})
+
+@app.get("/api/telemetry")
+def utilization():
+    return jsonify(telemetry.snapshot())
+
+@app.get("/api/logo/assets")
+def logo_assets():
+    return jsonify({"assets": list_assets(BASE_DIR), "defaults": DEFAULTS})
+
+@app.post("/api/logo/assets")
+def upload_logo():
     try:
-        if ACTIVE_DIRS_FILE.exists():
-            with open(ACTIVE_DIRS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get("root_dir", ""), data.get("dest_dir", "")
-    except Exception as e:
-        print(f"Error loading active dirs: {e}")
-    return "", ""
+        with logo_store_lock:
+            item = save_asset(BASE_DIR, request.files.get("file"))
+        return jsonify(item), 201
+    except (ValueError, OSError) as exc:
+        return jsonify({"error": str(exc)}), 400
 
-def save_active_dirs(root_dir, dest_dir):
+@app.route("/api/logo/presets", methods=["GET", "POST"])
+def logo_presets():
     try:
-        with open(ACTIVE_DIRS_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"root_dir": str(root_dir), "dest_dir": str(dest_dir)}, f, indent=4)
-    except Exception as e:
-        print(f"Error saving active dirs: {e}")
+        with logo_store_lock:
+            if request.method == "POST":
+                data = request.get_json(silent=True) or {}
+                item = save_preset(BASE_DIR, data.get("name"), data.get("asset_id"), data.get("settings", {}))
+                return jsonify(item), 201
+            return jsonify({"presets": list_presets(BASE_DIR)})
+    except (ValueError, OSError) as exc:
+        return jsonify({"error": str(exc)}), 400
 
-last_root_dir, last_dest_dir = load_active_dirs()
-
-# Fallback to defaults if directories do not exist on the current host system
-if not last_root_dir or not Path(last_root_dir).exists():
-    last_root_dir = str(SRC_DIR.resolve())
-if not last_dest_dir or not Path(last_dest_dir).exists():
-    last_dest_dir = str(DEST_DIR.resolve())
-
-# Thread-safe logging and status
-task_status = {
-    "status": "idle",       # "idle", "running", "completed", "failed"
-    "task_type": "",        # "audit", "resize", "export"
-    "progress": 0,
-    "total": 0,
-    "current": 0,
-    "current_file": "",
-    "logs": [],
-    "results": None
-}
-status_lock = threading.RLock()
-
-
-# PyTorch / Faster R-CNN Model cache
-_model = None
-_device = None
-model_lock = threading.Lock()
-
-def add_log(message):
-    with status_lock:
-        print(message)
-        task_status["logs"].append(message)
-        if len(task_status["logs"]) > 500:
-            task_status["logs"].pop(0)
-
-def load_cached_model():
-    global _model, _device
-    with model_lock:
-        if _model is None:
-            add_log("Loading Faster R-CNN Model...")
-            from subject_aware_resize import get_model
-            _model, _device = get_model()
-            add_log(f"Model successfully loaded on {_device}.")
-        return _model, _device
-
-def run_audit_task(root_dir, subfolder):
-    global task_status, last_root_dir, last_dest_dir
+@app.get("/api/logo/images")
+def logo_images():
     try:
-        if not root_dir:
-            root_path = SRC_DIR
-        else:
-            root_path = Path(root_dir)
-            
-        if not root_path.exists() or not root_path.is_dir():
-            raise ValueError(f"Root path '{root_path}' does not exist or is not a directory.")
-            
-        last_root_dir = str(root_path.resolve())
-        if root_path.name.lower() == "resizing":
-            default_dest = root_path.parent / "Re-sized"
-        else:
-            default_dest = root_path.parent / f"{root_path.name}_resized"
-        last_dest_dir = str(default_dest.resolve())
-        save_active_dirs(last_root_dir, last_dest_dir)
-            
-        search_dir = root_path / subfolder if subfolder else root_path
-        image_paths = []
-        for ext in ['*.png', '*.jpg', '*.jpeg']:
-            image_paths.extend(list(search_dir.rglob(ext)))
-            
-        total = len(image_paths)
-        with status_lock:
-            task_status["status"] = "running"
-            task_status["task_type"] = "audit"
-            task_status["progress"] = 0
-            task_status["total"] = total
-            task_status["current"] = 0
-            task_status["logs"] = []
-            task_status["results"] = None
-            
-        add_log(f"Starting audit for {total} images under {search_dir}...")
-        
-        model, device = load_cached_model()
-        from analyze_padding import needs_padding
-        from subject_aware_resize import get_subject_bbox
-        
-        pad_count = 0
-        normal_crop_count = 0
-        
-        for i, img_path in enumerate(image_paths):
-            try:
-                rel_path = img_path.relative_to(root_path)
-            except Exception:
-                rel_path = img_path
-            rel_path_str = str(rel_path)
-            
-            with status_lock:
-                if task_status["status"] == "idle":
-                    add_log("Audit cancelled by user.")
-                    return
-                task_status["current"] = i + 1
-                task_status["progress"] = int((i + 1) / total * 100)
-                task_status["current_file"] = rel_path_str
-                
-            try:
-                with Image.open(img_path).convert("RGB") as img:
-                    bbox = get_subject_bbox(model, device, img)
-                    if needs_padding(img, bbox):
-                        pad_count += 1
-                        add_log(f"[{i+1}/{total}] PADDING REQUIRED: {rel_path_str}")
-                    else:
-                        normal_crop_count += 1
-                        add_log(f"[{i+1}/{total}] Crop ready: {rel_path_str}")
-            except Exception as e:
-                add_log(f"Error on {img_path.name}: {e}")
-                
-        add_log("--- Audit Complete ---")
-        add_log(f"Total Processed: {total}")
-        add_log(f"Images requiring padding: {pad_count}")
-        add_log(f"Images crop ready: {normal_crop_count}")
-        
-        with status_lock:
-            task_status["status"] = "completed"
-            task_status["results"] = {
-                "total": total,
-                "padding_required": pad_count,
-                "crop_ready": normal_crop_count
-            }
-            
-    except Exception as exc:
-        add_log(f"Audit task failed: {exc}")
-        with status_lock:
-            task_status["status"] = "failed"
+        root = Path(request.args.get("root", "")).resolve()
+        if not request.args.get("root") or not root.is_dir():
+            raise ValueError("Choose an existing folder of resized images.")
+        files = images_under(root)
+        return jsonify({"images": [p.relative_to(root).as_posix() for p in files[:500]], "total": len(files)})
+    except (ValueError, OSError) as exc:
+        return jsonify({"error": str(exc)}), 400
 
-def run_resize_task(root_dir, dest_dir, subfolder):
-    global task_status, last_root_dir, last_dest_dir
+@app.post("/api/logo/preview")
+def logo_preview():
+    data = request.get_json(silent=True) or {}
     try:
-        if not root_dir:
-            root_path = SRC_DIR
-        else:
-            root_path = Path(root_dir)
-            
-        if not root_path.exists() or not root_path.is_dir():
-            raise ValueError(f"Root path '{root_path}' does not exist or is not a directory.")
-            
-        if not dest_dir:
-            if root_path.name.lower() == "resizing":
-                dest_dir_path = root_path.parent / "Re-sized"
-            else:
-                dest_dir_path = root_path.parent / f"{root_path.name}_resized"
-        else:
-            dest_dir_path = Path(dest_dir)
-            
-        last_root_dir = str(root_path.resolve())
-        last_dest_dir = str(dest_dir_path.resolve())
-        save_active_dirs(last_root_dir, last_dest_dir)
-            
-        search_dir = root_path / subfolder if subfolder else root_path
-        image_paths = []
-        for ext in ['*.png', '*.jpg', '*.jpeg']:
-            image_paths.extend(list(search_dir.rglob(ext)))
-            
-        total = len(image_paths)
-        with status_lock:
-            task_status["status"] = "running"
-            task_status["task_type"] = "resize"
-            task_status["progress"] = 0
-            task_status["total"] = total
-            task_status["current"] = 0
-            task_status["logs"] = []
-            task_status["results"] = None
-            
-        add_log(f"Starting resizing for {total} images under {search_dir}...")
-        add_log(f"Output directory: {dest_dir_path}")
-        
-        model, device = load_cached_model()
-        from subject_aware_resize import get_subject_bbox, smart_crop_and_resize
-        
-        padded_files = []
-        
-        for i, img_path in enumerate(image_paths):
-            rel_path = img_path.relative_to(root_path)
-            dest_path = dest_dir_path / rel_path
-            
-            rel_path_str = str(rel_path)
-            
-            with status_lock:
-                if task_status["status"] == "idle":
-                    add_log("Resizing cancelled by user.")
-                    return
-                task_status["current"] = i + 1
-                task_status["progress"] = int((i + 1) / total * 100)
-                task_status["current_file"] = rel_path_str
-                
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            try:
-                with Image.open(img_path).convert("RGB") as img:
-                    bbox = get_subject_bbox(model, device, img)
-                    result_img, used_pad = smart_crop_and_resize(img, bbox)
-                    result_img.save(dest_path)
-                    if used_pad:
-                        padded_files.append(rel_path)
-                        add_log(f"[{i+1}/{total}] PADDED (blur fill): {rel_path_str}")
-                    else:
-                        add_log(f"[{i+1}/{total}] Cropped: {rel_path_str}")
-            except Exception as e:
-                add_log(f"Error on {img_path.name}: {e}")
-                
-        # Update manual_patch_list.md
-        list_path = dest_dir_path / "manual_patch_list.md"
-        existing_items = set()
-        if list_path.exists():
-            with open(list_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("- `") and line.endswith("`"):
-                        item = line[3:-1]
-                        existing_items.add(item.replace('/', '\\'))
-                        
-        for p in padded_files:
-            existing_items.add(str(p).replace('/', '\\'))
-            
-        with open(list_path, "w", encoding="utf-8") as f:
-            f.write("# Images Requiring Manual Patch (Padded)\n\n")
-            for item in sorted(list(existing_items)):
-                f.write(f"- `{item}`\n")
-                
-        add_log("--- Resizing Complete ---")
-        add_log(f"Total Processed: {total}")
-        add_log(f"New padded files logged: {len(padded_files)}")
-        
-        with status_lock:
-            task_status["status"] = "completed"
-            task_status["results"] = {
-                "total": total,
-                "new_padded": len(padded_files)
-            }
-            
-    except Exception as exc:
-        add_log(f"Resize task failed: {exc}")
-        with status_lock:
-            task_status["status"] = "failed"
+        image_path = source_image(data.get("source", ""), data.get("image", ""))
+        logo = read_logo(asset_path(BASE_DIR, data.get("asset_id", "default")))
+        result, _ = render(image_path, logo, data.get("settings", {}))
+        buffer = io.BytesIO()
+        result.save(buffer, format="PNG")
+        buffer.seek(0)
+        return send_file(buffer, mimetype="image/png", max_age=0)
+    except (ValueError, OSError) as exc:
+        return jsonify({"error": str(exc)}), 400
 
-def run_export_task(export_src, export_dest):
-    global task_status
+@app.post("/api/logo/apply")
+def logo_apply():
+    data = request.get_json(silent=True) or {}
     try:
-        if not export_src:
-            export_src_path = DEST_DIR / "With Logo"
-        else:
-            export_src_path = Path(export_src)
-            
-        if not export_dest:
-            export_dest_path = DEST_DIR / "Final For Shopify"
-        else:
-            export_dest_path = Path(export_dest)
-            
-        from move_to_shopify import get_export_folders
-        folders = get_export_folders(export_src_path)
-        total = len(folders)
-        
-        with status_lock:
-            task_status["status"] = "running"
-            task_status["task_type"] = "export"
-            task_status["progress"] = 0
-            task_status["total"] = total
-            task_status["current"] = 0
-            task_status["logs"] = []
-            task_status["results"] = None
-            
-        add_log(f"Starting Shopify export from {export_src_path} to {export_dest_path}...")
-        
-        import re
-        class ProgressLogger:
-            def __init__(self):
-                self.current_folder_count = 0
-                
-            def log(self, message):
-                add_log(message)
-                if "Processing folder" in message:
-                    self.current_folder_count += 1
-                    with status_lock:
-                        task_status["current"] = self.current_folder_count
-                        if total > 0:
-                            task_status["progress"] = int((self.current_folder_count) / total * 100)
-                        match = re.search(r"Processing folder '([^']+)'", message)
-                        if match:
-                            task_status["current_file"] = match.group(1)
-                            
-        logger = ProgressLogger()
-        from move_to_shopify import run_export
-        copied_count = run_export(
-            src_dir=str(export_src_path),
-            dest_dir=str(export_dest_path),
-            dry_run=False,
-            delete_empty_src=True,
-            log_callback=logger.log
-        )
-        
-        add_log("--- Export Complete ---")
-        add_log(f"Successfully copied and renamed {copied_count} files to Final For Shopify directory.")
-        
-        with status_lock:
-            task_status["status"] = "completed"
-            task_status["results"] = {
-                "moved_folders": total,
-                "copied_files": copied_count
-            }
-            
-    except Exception as exc:
-        add_log(f"Export task failed: {exc}")
-        with status_lock:
-            task_status["status"] = "failed"
-
+        source = data.get("source", "")
+        destination = data.get("destination", "")
+        if not source or not destination:
+            raise ValueError("Choose both source and output folders.")
+        validate_paths(source, destination)
+        if 'target_width' in data or 'target_height' in data:
+            width, height = data.get('target_width'), data.get('target_height')
+            if type(width) is not int or type(height) is not int or not (64 <= width <= 6000 and 64 <= height <= 6000) or width * height > 24000000:
+                raise ValueError('Choose valid output dimensions before logo placement.')
+            from PIL import Image, ImageOps
+            for file in images_under(Path(source)):
+                with Image.open(file) as original:
+                    actual = ImageOps.exif_transpose(original).size
+                if actual != (width, height):
+                    raise ValueError(f'{file.name} is {actual[0]} × {actual[1]}. Run Resize to prepare {width} × {height} before placing the logo.')
+        asset_id = data.get("asset_id", "default")
+        read_logo(asset_path(BASE_DIR, asset_id))
+        settings = settings_for(data.get("settings", {}))
+        job_id = jobs.start("logo", lambda job: run_logo(job, BASE_DIR, source, destination, asset_id, settings))
+        return jsonify({"message": "Logo placement started.", "job_id": job_id}), 202
+    except (ValueError, OSError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 409 if jobs.snapshot()["active"] else 400
 
 # REST API endpoints
 
@@ -398,33 +180,14 @@ def get_folders():
             
         folders = []
         if root_path.exists() and root_path.is_dir():
-            # 1. Look for subfolders
-            for p in sorted(root_path.iterdir()):
-                if p.is_dir() and not p.name.startswith('.'):
-                    img_count = len(list(p.rglob('*.png')) + list(p.rglob('*.jpg')) + list(p.rglob('*.jpeg')) + list(p.rglob('*.PNG')) + list(p.rglob('*.JPG')) + list(p.rglob('*.JPEG')))
-                    if img_count > 0:
-                        folders.append({
-                            "name": p.name,
-                            "image_count": img_count
-                        })
-            
-            # 2. Count images directly in the root
-            root_img_count = len(list(root_path.glob('*.png')) + list(root_path.glob('*.jpg')) + list(root_path.glob('*.jpeg')) + list(root_path.glob('*.PNG')) + list(root_path.glob('*.JPG')) + list(root_path.glob('*.JPEG')))
-            if root_img_count > 0:
-                folders.append({
-                    "name": ".",
-                    "image_count": root_img_count
-                })
-            
-            # 3. If there are no subfolders and no direct files, check if there are any images recursively
-            if not folders:
-                all_img_count = len(list(root_path.rglob('*.png')) + list(root_path.rglob('*.jpg')) + list(root_path.rglob('*.jpeg')) + list(root_path.rglob('*.PNG')) + list(root_path.rglob('*.JPG')) + list(root_path.rglob('*.JPEG')))
-                if all_img_count > 0:
-                    folders.append({
-                        "name": ".",
-                        "image_count": all_img_count
-                    })
-            
+            for child in sorted(root_path.iterdir()):
+                if child.is_dir() and not child.name.startswith('.'):
+                    count = len(images_under(child))
+                    if count:
+                        folders.append({"name": child.name, "image_count": count})
+            direct = len(images_under(root_path, recursive=False))
+            if direct:
+                folders.append({"name": ".", "image_count": direct})
             return jsonify({
                 "folders": folders, 
                 "valid": True, 
@@ -442,20 +205,33 @@ def get_folders():
 @app.route('/api/status', methods=['GET'])
 def get_status():
     with status_lock:
-        return jsonify(task_status)
+        return jsonify(jobs.snapshot(request.args.get("after", 0, type=int)))
 
 @app.route('/api/active-directory', methods=['GET'])
 def get_active_directory():
     global last_root_dir, last_dest_dir
-    return jsonify({
-        "root_dir": last_root_dir,
-        "dest_dir": last_dest_dir
-    })
+    return jsonify({"root_dir": last_root_dir, "dest_dir": last_dest_dir,
+                    "export_src": str(DEST_DIR / "With Logo"), "export_dest": str(DEST_DIR / "Final For Shopify")})
 
-@app.route('/api/select-folder', methods=['GET'])
+@app.route('/api/select-folder', methods=['POST'])
 def select_folder():
-    initial_dir = request.args.get('initial_dir', '').strip()
+    initial_dir = (request.get_json(silent=True) or {}).get('initial_dir', '')
+    if not isinstance(initial_dir, str):
+        return jsonify({"error": "Invalid initial folder."}), 400
+    initial_dir = initial_dir.strip()
+    if not folder_picker_lock.acquire(blocking=False):
+        return jsonify({"error": "A folder picker is already open."}), 409
     try:
+        if os.name == 'nt':
+            powershell = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'WindowsPowerShell' / 'v1.0' / 'powershell.exe'
+            args = [str(powershell), '-NoProfile', '-NonInteractive', '-STA', '-ExecutionPolicy', 'Bypass',
+                    '-File', str(APP_DIR / 'select_folder.ps1')]
+            if initial_dir and Path(initial_dir).is_dir():
+                args += ['-InitialDirectory', initial_dir]
+            result = subprocess.run(args, capture_output=True, encoding='utf-8', errors='replace',
+                                    creationflags=subprocess.CREATE_NO_WINDOW, check=True)
+            selected = json.loads(result.stdout)['selected_path']
+            return jsonify({"selected_path": str(Path(selected).resolve()) if selected else ''})
         import tkinter as tk
         from tkinter import filedialog
         
@@ -478,57 +254,72 @@ def select_folder():
             return jsonify({"selected_path": normalized_path})
         else:
             return jsonify({"selected_path": ""})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        app.logger.exception('Folder picker failed')
+        return jsonify({"error": "Could not open the system folder picker. Enter the folder path manually."}), 500
+    finally:
+        folder_picker_lock.release()
 
-@app.route('/api/cancel', methods=['POST'])
+@app.post("/api/cancel")
 def cancel_task():
-    with status_lock:
-        if task_status["status"] == "running":
-            task_status["status"] = "idle"
-            add_log("Task cancellation requested.")
-            return jsonify({"message": "Cancellation requested."})
-        return jsonify({"message": "No task is currently running."})
+    return jsonify({"message": "Cancellation requested; finishing the current operation." if jobs.cancel() else "No active task."})
 
-@app.route('/api/analyze', methods=['POST'])
-def start_analyze():
-    data = request.json or {}
-    folder = data.get('folder', '')
-    root_dir = data.get('root_dir', '').strip()
-    
-    with status_lock:
-        if task_status["status"] == "running":
-            return jsonify({"error": "A task is already running."}), 400
-            
-    threading.Thread(target=run_audit_task, args=(root_dir, folder)).start()
-    return jsonify({"message": "Audit started."})
+@app.post('/api/export/preview')
+def preview_export():
+    data = request.get_json(silent=True) or {}
+    try:
+        source, destination, mode = data.get('export_src'), data.get('export_dest'), data.get('mode')
+        if not isinstance(source, str) or not source.strip() or not isinstance(destination, str) or not destination.strip():
+            raise ValueError('Choose a source folder and a separate output folder.')
+        resolved_source, resolved_destination, entries = export_plan(source.strip(), destination.strip(), mode)
+        return jsonify({'total': len(entries), 'copy': sum(e['status'] == 'copy' for e in entries),
+                        'already_present': sum(e['status'] == 'already_present' for e in entries),
+                        'conflicts': sum(e['status'] == 'conflict' for e in entries), 'entries': entries[:200],
+                        'signature': export_signature(resolved_source, resolved_destination, mode, entries)})
+    except (ValueError, OSError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
 
-@app.route('/api/resize', methods=['POST'])
-def start_resize():
-    data = request.json or {}
-    folder = data.get('folder', '')
-    root_dir = data.get('root_dir', '').strip()
-    dest_dir = data.get('dest_dir', '').strip()
-    
-    with status_lock:
-        if task_status["status"] == "running":
-            return jsonify({"error": "A task is already running."}), 400
-            
-    threading.Thread(target=run_resize_task, args=(root_dir, dest_dir, folder)).start()
-    return jsonify({"message": "Resizing started."})
-
-@app.route('/api/export', methods=['POST'])
-def start_export():
-    data = request.json or {}
-    export_src = data.get('export_src', '').strip()
-    export_dest = data.get('export_dest', '').strip()
-    
-    with status_lock:
-        if task_status["status"] == "running":
-            return jsonify({"error": "A task is already running."}), 400
-            
-    threading.Thread(target=run_export_task, args=(export_src, export_dest)).start()
-    return jsonify({"message": "Export started."})
+@app.post("/api/analyze")
+@app.post("/api/resize")
+@app.post("/api/export")
+def start_operation():
+    global last_root_dir, last_dest_dir
+    data = request.get_json(silent=True) or {}
+    kind = {"analyze": "audit", "resize": "resize", "export": "export"}[request.path.rsplit("/", 1)[-1]]
+    try:
+        if kind == "export":
+            source = data.get("export_src")
+            destination = data.get("export_dest")
+            mode = data.get('mode')
+            signature = data.get('signature')
+            if not isinstance(source, str) or not source.strip() or not isinstance(destination, str) or not destination.strip():
+                raise ValueError('Choose a source folder and a separate output folder.')
+            if mode not in {'lightroom', 'native'}:
+                raise ValueError('Choose Lightroom or native app export.')
+            if not isinstance(signature, str) or len(signature) != 64:
+                raise ValueError('Preview the export before starting it.')
+            validate_paths(source, destination)
+            target = lambda job: run_export(job, source, destination, mode, signature)
+        else:
+            source = data.get("root_dir") or str(SRC_DIR)
+            destination = data.get("dest_dir") or str(Path(source).with_name("Re-sized" if Path(source).name.lower() == "resizing" else Path(source).name + "_resized"))
+            folder = data.get("folder", "")
+            validate_paths(source, destination, folder)
+            device = data.get("device_id", "cpu")
+            width, height = data.get('target_width', 1200), data.get('target_height', 1800)
+            if type(width) is not int or type(height) is not int or not (64 <= width <= 6000 and 64 <= height <= 6000) or width * height > 24000000:
+                raise ValueError('Choose whole-number output dimensions from 64 to 6000 pixels, up to 24 megapixels.')
+            target = lambda job: run_images(job, kind, source, destination, folder, device, width, height)
+        job_id = jobs.start(kind, target, device_id=data.get("device_id", "cpu") if kind != "export" else "cpu")
+        if kind != "export":
+            last_root_dir, last_dest_dir = str(Path(source).resolve()), str(Path(destination).resolve())
+            try:
+                ACTIVE_DIRS_FILE.write_text(json.dumps({"root_dir": last_root_dir, "dest_dir": last_dest_dir}), encoding="utf-8")
+            except OSError as exc:
+                jobs.log(f"Settings could not be saved: {exc}")
+        return jsonify({"message": f"{kind.title()} started.", "job_id": job_id}), 202
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 409 if jobs.snapshot()["active"] else 400
 
 @app.route('/api/patch-list', methods=['GET'])
 def get_patch_list():
@@ -568,11 +359,41 @@ def get_patch_list():
                         items.append({
                             "relative_path": path_str,
                             "src_url": src_url,
-                            "resized_url": resized_url
+                            "resized_url": resized_url,
+                            "padded": True
                         })
-        return jsonify({"items": items})
+        padded_count = len(items)
+        if request.args.get('all') == '1' and dest_dir_path.is_dir():
+            padded_names = {item['relative_path'].replace('\\', '/') for item in items}
+            items = []
+            for file in images_under(dest_dir_path):
+                relative = file.relative_to(dest_dir_path.resolve()).as_posix()
+                source_file = (root_path / relative).resolve()
+                if not source_file.is_relative_to(root_path.resolve()) or not source_file.is_file():
+                    continue
+                items.append({'relative_path': relative, 'padded': relative in padded_names,
+                              'src_url': f"/api/image?root={urllib.parse.quote(str(root_path.resolve()))}&file={urllib.parse.quote(relative)}",
+                              'resized_url': f"/api/image?root={urllib.parse.quote(str(dest_dir_path.resolve()))}&file={urllib.parse.quote(relative)}"})
+        return jsonify({"items": items, "padded_count": padded_count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.get('/api/photoshop/status')
+def photoshop_status():
+    try:
+        return jsonify(repair_status(request.args.get('dest_dir') or last_dest_dir))
+    except (OSError, ValueError, KeyError) as exc:
+        return jsonify(error=str(exc)), 400
+
+
+@app.get('/api/photoshop/script')
+def photoshop_script():
+    destination = Path(request.args.get('dest_dir') or last_dest_dir).resolve()
+    script = destination / SCRIPT
+    if not script.is_file():
+        return jsonify(error='No generated Photoshop script. Complete resizing first.'), 404
+    return send_file(script, as_attachment=True, download_name=SCRIPT)
+
 
 @app.route('/api/image')
 def serve_image():
@@ -597,6 +418,6 @@ def serve_image():
         
     return send_file(full_path)
 
-if __name__ == '__main__':
-    print("Starting server on http://127.0.0.1:5000")
-    app.run(debug=False, port=5000)
+if __name__ == "__main__":
+    from waitress import serve
+    serve(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5000")), threads=6)

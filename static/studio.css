@@ -1,0 +1,73 @@
+/* Guided photographic workspace. */
+[hidden] { display:none !important; }
+:root { --bg-app:#191b1d; --bg-sidebar:#151719; --bg-card:#232629; --primary:#dbb16b; --primary-hover:#ebc383; --accent:#dbb16b; --text-main:#edece8; --text-muted:#a7aaad; --font-sans:'Segoe UI',Arial,sans-serif; --border-color:#383c3f; }
+body { background:var(--bg-app); }
+.studio-brand-icon { width:38px; height:38px; }
+.brand-copy h2 { color:#e2bb7a; letter-spacing:.16em; }
+.main-content { padding:22px 28px; }
+.card,.stat-card,.modal-content { box-shadow:none; backdrop-filter:none; }
+.btn { border-radius:5px; box-shadow:none; }
+.btn-primary,.btn-accent { background:var(--primary);color:#191b1d; }
+.btn-primary:hover,.btn-accent:hover { background:var(--primary-hover); }
+.workflow-steps { gap:0; padding:8px 0 18px; border-bottom:1px solid var(--border-color); }
+.workflow-steps button { flex:1; border:0; border-bottom:2px solid var(--border-color); border-radius:0; padding:14px 8px; font-size:14px; color:var(--text-muted); }
+.workflow-steps button[aria-current="step"] { background:transparent; border-color:var(--primary); color:var(--primary); }
+.workflow-hardware { padding:5px 10px; font-size:11px; align-self:start; }
+.monitor-panel { gap:8px; margin-bottom:20px; }
+.monitor-panel .progress-card { padding:12px 16px; }
+.progress-header h2 { font-size:15px; }
+.progress-header p,.progress-footer,.progress-card .monitor-note { font-size:12px; }
+.progress-bar-container { margin:8px 0; height:5px; }
+.section-header { margin-bottom:18px; }
+.section-header h1 { font-size:26px; }
+.review-layout { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:18px; align-items:start; }
+.review-layout .gallery-card { order:0; min-width:0; padding:0; background:transparent; border:0; }
+.photoshop-repair-card { order:1; padding:22px 18px; }
+.photoshop-repair-card h2 { font-size:19px; margin-bottom:16px; }
+.photoshop-repair-card .button-group { display:grid; gap:10px; margin:20px 0; }
+.photoshop-repair-card .btn { width:100%; white-space:normal; font-size:13px; }
+#photoshop-repair-status { padding:14px; background:#b58b4020; border:1px solid #b58b4040; border-radius:5px; font-size:13px; line-height:1.6; }
+#photoshop-repair-path { font-size:11px; margin-top:10px; }
+.review-stage { height:52vh; min-height:300px; max-height:680px; background:#111315; border:1px solid var(--border-color); border-radius:6px 6px 0 0; display:flex; align-items:center; justify-content:center; overflow:auto; }
+.review-stage img { object-fit:contain; flex-shrink:0; }
+.review-stage img[hidden],#review-empty[hidden] { display:none; }
+.review-toolbar { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border-color); border-top:0; background:var(--bg-card); }
+.review-toolbar .btn { padding:7px 10px; font-size:12px; }
+.review-toolbar select { width:85px; padding:7px; margin:0; font-size:12px; }
+.review-toolbar label { font-size:12px; white-space:nowrap; margin:0; }
+.review-before { margin-left:auto!important; display:flex; align-items:center; gap:6px; }
+#review-position { font-size:12px; white-space:nowrap; }
+#review-filename { padding:7px 2px; font-size:11px; overflow-wrap:anywhere; }
+.gallery-controls { display:flex; align-items:center; justify-content:space-between; margin:6px 0 10px; gap:10px; }
+.gallery-controls label,.gallery-controls .subtitle { font-size:12px; margin:0; }
+#padded-gallery { display:flex; gap:10px; overflow-x:auto; padding:2px 0 10px; }
+#padded-gallery .gallery-item { flex:0 0 108px; width:108px; padding:0; color:var(--text-main); text-align:left; border:1px solid var(--border-color); border-radius:5px; background:var(--bg-card); cursor:pointer; overflow:hidden; }
+#padded-gallery .gallery-item.selected { border:2px solid var(--primary); }
+#padded-gallery .gallery-preview { height:100px; }
+#padded-gallery .gallery-preview img { width:100%; height:100%; object-fit:contain; }
+#padded-gallery .gallery-tag { font-size:9px; padding:2px 4px; top:auto; bottom:4px; left:4px; }
+#padded-gallery .gallery-info { padding:6px; }
+#padded-gallery h4 { font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#padded-gallery .gallery-info p { display:none; }
+.modal-content { background:var(--bg-card); border-radius:8px; padding:24px; max-height:94vh; overflow:auto; }
+.comparison-container { gap:18px; margin-top:18px; }
+.comp-box img { max-height:72vh; object-fit:contain; }
+#workflow-footer { display:flex; align-items:center; justify-content:space-between; gap:18px; padding-top:14px; border-top:1px solid var(--border-color); }
+#workflow-context { font-size:11px; overflow-wrap:anywhere; }
+.selector-card .control-row { display:block; }
+.selector-card .control-row > .input-group { max-width:360px; margin-bottom:18px; }
+.selector-card .button-group { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.selector-card .button-group > .monitor-note { flex-basis:100%; order:0; }
+.selector-card #btn-audit,.selector-card #btn-resize { order:2; }
+.size-controls { order:1; flex-basis:100%; display:grid; grid-template-columns:minmax(220px,2fr) 130px 130px 100px; align-items:end; gap:14px; margin:10px 0; }
+.size-controls label { display:block; margin-bottom:7px; }
+.size-controls select,.size-controls input { width:100%; padding:12px; border:1px solid var(--border-color); color:var(--text-main); background:var(--bg-input); border-radius:5px; }
+.size-controls .monitor-note { align-self:center; }
+.selector-card label { font-size:12px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+body.light-mode { --primary:#8c642e; --primary-hover:#a77c40; --accent:#8c642e; }
+body.light-mode .btn-primary,body.light-mode .btn-accent { color:#fff; }
+body.light-mode .review-stage { background:#d8dadb; }
+@media(max-width:1050px) { .review-layout { grid-template-columns:minmax(0,1fr); } .photoshop-repair-card { order:1; } .review-stage { height:50vh; } }
+@media(max-width:720px) { .main-content { padding:16px; } .workflow-steps button { font-size:11px; } .review-toolbar { flex-wrap:wrap; } }
+@media(max-width:1100px) { .size-controls { grid-template-columns:minmax(0,1fr) 100px 100px; } .size-controls .monitor-note { grid-column:1/-1; } }

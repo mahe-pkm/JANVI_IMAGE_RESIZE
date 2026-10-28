@@ -14,7 +14,8 @@ def clean_product_name(folder_name: str) -> str:
     """
     Returns the folder name directly as the product name.
     """
-    return folder_name.strip()
+    name = re.sub(r'[\s_-]+selected(?:[\s_-]+images?)?(?:\s*\(\d+\))?$', '', folder_name.strip(), flags=re.IGNORECASE).strip(' _-')
+    return name or folder_name.strip()
 
 def get_export_folders(src_dir) -> list:
     """
@@ -58,7 +59,7 @@ def get_product_name_for_folder(export_folder: Path, src_dir: Path) -> str:
         
     return product_name
 
-def run_export(src_dir: str, dest_dir: str, dry_run: bool = True, delete_empty_src: bool = True, log_callback=print):
+def run_export(src_dir: str, dest_dir: str, dry_run: bool = True, delete_empty_src: bool = False, log_callback=print):
     """
     Executes the reconstructed Shopify export flow:
     1. Scan recursively for all image files.
@@ -114,6 +115,7 @@ def run_export(src_dir: str, dest_dir: str, dry_run: bool = True, delete_empty_s
         
         log_callback(f"Processing folder '{export_folder.name}' -> Product name: '{product_name}' ({len(files)} files)")
         
+        verified_copies = []
         for idx, file in enumerate(files, start=1):
             ext = file.suffix.lower()
             
@@ -133,13 +135,18 @@ def run_export(src_dir: str, dest_dir: str, dry_run: bool = True, delete_empty_s
             if not dry_run:
                 try:
                     shutil.copy2(file, dest_file)
+                    import hashlib
+                    with file.open("rb") as original, dest_file.open("rb") as copied:
+                        if hashlib.file_digest(original, "sha256").digest() != hashlib.file_digest(copied, "sha256").digest():
+                            raise OSError("Copy checksum mismatch; source preserved")
+                    verified_copies.append(file)
                     files_copied += 1
                 except Exception as e:
                     log_callback(f"  Error copying {file.name}: {e}")
                     
         # Clean up source files and export folders if requested
         if not dry_run and delete_empty_src:
-            for file in files:
+            for file in verified_copies:
                 try:
                     file.unlink()
                 except Exception as e:
@@ -180,7 +187,7 @@ def main():
         src_dir=src,
         dest_dir=dest,
         dry_run=not execute,
-        delete_empty_src=not no_delete,
+        delete_empty_src="--delete-sources" in sys.argv and not no_delete,
         log_callback=print
     )
 
