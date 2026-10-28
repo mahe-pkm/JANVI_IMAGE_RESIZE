@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-labelledby="title desc">
+<title id="title">Janvi Image Studio workspace</title>
+<desc id="desc">Illustrated dark workspace with synthetic product art, a guided stepper, thumbnail filmstrip, Photoshop repair controls and sample hardware readings.</desc>
+<defs>
+  <linearGradient id="background" x2="0" y2="1"><stop stop-color="#52716f"/><stop offset="1" stop-color="#293d3d"/></linearGradient>
+  <linearGradient id="fabric" x2="1" y2="1"><stop stop-color="#dcbf82"/><stop offset="1" stop-color="#987345"/></linearGradient>
+  <pattern id="dots" width="35" height="35" patternUnits="userSpaceOnUse"><circle cx="17" cy="17" r="2" fill="#f2ddab" opacity=".55"/></pattern>
+  <g id="product"><rect width="242" height="354" fill="url(#background)"/><ellipse cx="121" cy="327" rx="80" ry="11" fill="#142729" opacity=".4"/><path d="M107 36h28l12 23 42 28 25 67-35 12-17-41 24 181H56l24-181-17 41-35-12 25-67 42-28z" fill="url(#fabric)"/><path d="M107 36q14 35 28 0M121 67v221" fill="none" stroke="#edcf95" stroke-width="3"/><path d="M60 291h122v15H56z" fill="#715b3b"/><path d="M83 100h76l23 187H60z" fill="url(#dots)"/></g>
+</defs>
+<rect width="1280" height="800" rx="18" fill="#1c1e20"/>
+<rect x="1" y="1" width="1278" height="798" rx="17" fill="none" stroke="#3c4144"/>
+<path d="M202 0v800" stroke="#3a3d3f"/>
+<g font-family="Segoe UI,Arial,sans-serif" fill="#e9e7e0">
+<rect x="23" y="28" width="38" height="38" rx="9" fill="#405d60"/><path d="M29 41V34h8m11 0h7v7m0 11v7h-7m-11 0h-8v-7" fill="none" stroke="#d9b371" stroke-width="3"/>
+<text x="75" y="45" font-size="18" letter-spacing="2" font-weight="700">JANVI</text><text x="75" y="61" font-size="8" letter-spacing="1.8" fill="#a8b7b7">IMAGE STUDIO</text>
+<text x="28" y="123" font-size="13" fill="#a6acad">Dashboard</text>
+<text x="28" y="168" font-size="13" fill="#a6acad">Image Workflow</text>
+<text x="28" y="213" font-size="13" fill="#a6acad">Logo Placement</text>
+<rect x="16" y="237" width="170" height="45" rx="4" fill="#353b3e"/><path d="M17 240v39" stroke="#d9b371" stroke-width="3"/><text x="29" y="264" font-size="13" font-weight="600">Review &amp; Repair</text>
+<text x="25" y="346" font-size="10" fill="#a6acad">SYSTEM USAGE</text>
+<g fill="#24292b" stroke="#3a4143"><rect x="18" y="362" width="166" height="86" rx="6"/><rect x="18" y="459" width="166" height="86" rx="6"/><rect x="18" y="556" width="166" height="108" rx="6"/></g>
+<text x="30" y="386" font-size="12">CPU</text><text x="147" y="386" font-size="12" fill="#d9b371">24%</text><rect x="30" y="401" width="140" height="4" fill="#434b4d"/><rect x="30" y="401" width="34" height="4" fill="#d9b371"/><text x="30" y="429" font-size="10" fill="#9ca7a9">App 8% · example reading</text>
+<text x="30" y="483" font-size="12">Memory</text><text x="30" y="507" font-size="12" font-weight="600">8.2 GB / 32 GB</text><text x="30" y="531" font-size="10" fill="#9ca7a9">App 0.4 GB</text>
+<text x="30" y="581" font-size="12">GPU</text><text x="30" y="608" font-size="12" font-weight="600">CPU selected</text><text x="30" y="640" font-size="10" fill="#d9b371">Processing settings →</text>
+<circle cx="27" cy="765" r="4" fill="#64b6a2"/><text x="40" y="769" font-size="11" fill="#a6acad">Ready</text>
+<g font-size="12"><text x="231" y="43" fill="#a4acad">1. Folders</text><text x="425" y="43" fill="#a4acad">2. Crop &amp; Resize</text><text x="643" y="43" fill="#e4c38a">3. Photoshop</text><text x="878" y="43" fill="#a4acad">4. Logo</text><text x="1091" y="43" fill="#a4acad">5. Export</text></g>
+<path d="M230 62h1020" stroke="#393d3f"/><path d="M624 62h183" stroke="#d9b371" stroke-width="2"/>
+<text x="232" y="113" font-size="27" font-weight="600">Review &amp; repair</text><text x="233" y="140" font-size="13" fill="#a6acad">Check the framing, repair padding, then continue to your logo.</text>
+<rect x="231" y="163" width="685" height="423" rx="6" fill="#111517" stroke="#3b4143"/>
+<use href="#product" x="453" y="177"/>
+<rect x="232" y="543" width="683" height="42" fill="#282e30"/>
+<text x="251" y="569" font-size="16">←</text><text x="290" y="569" font-size="11">1 / 4</text><text x="345" y="569" font-size="16">→</text><text x="658" y="569" font-size="11" fill="#bcc4c4">□ Original</text><text x="755" y="569" font-size="11">Fit ▾</text><text x="835" y="569" font-size="11">Full view</text>
+<text x="233" y="610" font-size="11" fill="#a6acad">Demo Collection / Studio Linen / front.png</text><text x="233" y="636" font-size="12">4 images · 2 padded</text>
+<g stroke="#3b4143" fill="#111517"><rect x="232" y="652" width="100" height="99" rx="5" stroke="#d9b371" stroke-width="2"/><rect x="343" y="652" width="100" height="99" rx="5"/><rect x="454" y="652" width="100" height="99" rx="5"/><rect x="565" y="652" width="100" height="99" rx="5"/></g>
+<use href="#product" transform="translate(254 657) scale(.23)"/><use href="#product" transform="translate(365 657) scale(.23)"/><use href="#product" transform="translate(476 657) scale(.23)"/><use href="#product" transform="translate(587 657) scale(.23)"/>
+<rect x="935" y="163" width="314" height="423" rx="6" fill="#252a2d" stroke="#3b4143"/>
+<text x="955" y="197" font-size="17" font-weight="600">Repair padding in Photoshop</text>
+<g font-size="12" fill="#a9b1b2"><text x="955" y="228">Process one image at a time.</text><text x="955" y="249">Keep names and folder hierarchy.</text><text x="955" y="270">Review the result before adding a logo.</text></g>
+<rect x="954" y="295" width="275" height="51" rx="5" fill="#3a362d" stroke="#59503e"/><text x="973" y="326" font-size="12" fill="#e2c591">2 padded images ready</text>
+<rect x="954" y="373" width="275" height="46" rx="5" fill="#d9b371"/><text x="998" y="401" font-size="12" fill="#24282a" font-weight="600">Open Photoshop &amp; Repair</text>
+<rect x="954" y="430" width="275" height="43" rx="5" fill="#333a3e"/><text x="1047" y="456" font-size="12">Download JSX</text>
+<rect x="954" y="484" width="275" height="43" rx="5" fill="#333a3e"/><text x="1018" y="510" font-size="12">Refresh Photoshop status</text>
+<rect x="1054" y="712" width="193" height="42" rx="5" fill="#d9b371"/><text x="1094" y="738" font-size="12" fill="#24282a" font-weight="600">Continue to logo →</text>
+<text x="234" y="780" font-size="10" fill="#778487">SYNTHETIC DEMO · ILLUSTRATED WORKSPACE · NO CUSTOMER IMAGES</text>
+</g></svg>
