@@ -3,12 +3,12 @@
 (function () {
     var queue = /*__JANVI_QUEUE__*/null;
     if (!queue) throw Error('Generate this script from a Janvi resize job first.');
-    var root = File($.fileName).parent;
-    if(!File(root.fsName+'/padding_manifest.json').exists && queue.original_root)root=Folder(queue.original_root);
-    var reportFile = File(root.fsName + '/' + queue.report);
+    var workspace = File($.fileName).parent;
+    var root = Folder(queue.original_root);
+    var reportFile = File(workspace.fsName + '/' + queue.report);
     var backupRoot = Folder(root.parent.fsName + '/.janvi-photoshop-backups/' + queue.fingerprint);
     var report = {schema_version:1, fingerprint:queue.fingerprint, status:'ready', items:[]};
-    var owned = null, stop = false, lockAcquired = false, lock = Folder(root.fsName + '/.janvi-photoshop-running');
+    var owned = null, stop = false, lockAcquired = false, lock = Folder(workspace.fsName + '/.janvi-photoshop-running');
     var originalDialogs = app.displayDialogs, originalUnits = app.preferences.rulerUnits;
 
     function quote(s) {
@@ -60,7 +60,7 @@
         if(previous.exists && !previous.remove())throw Error('Cannot rotate checkpoint');
         if(reportFile.exists && !reportFile.rename(previous.name))throw Error('Cannot preserve checkpoint');
         if(!temp.rename(queue.report)){if(previous.exists)previous.rename(queue.report);throw Error('Cannot commit checkpoint');}
-        reportFile=File(root.fsName+'/'+queue.report);
+        reportFile=File(workspace.fsName+'/'+queue.report);
     }
     function mkdir(folder){if(folder.exists)return;if(folder.parent.fsName!==folder.fsName)mkdir(folder.parent);if(!folder.create())throw Error('Cannot create '+folder.fsName);}
     function safeFile(relative){
@@ -102,8 +102,8 @@
     function itemFor(file){for(var i=0;i<report.items.length;i++)if(report.items[i].file===file)return report.items[i];var item={file:file,status:'pending'};report.items.push(item);return item;}
     var palette;
     try {
-        var manifestFile=File(root.fsName+'/padding_manifest.json');
-        if(!manifestFile.exists || parse(read(manifestFile)).fingerprint!==queue.fingerprint)throw Error('Cannot locate the matching resized folder. Keep this script with padding_manifest.json and the resized images.');
+        var manifestFile=File(workspace.fsName+'/padding_manifest.json');
+        if(!manifestFile.exists || parse(read(manifestFile)).fingerprint!==queue.fingerprint)throw Error('Cannot locate the matching Janvi repair workspace. Keep this script inside .janvi beside the resized images.');
         if(lock.exists)throw Error('A repair run may already be active. Close/cancel it before removing the .janvi-photoshop-running lock folder and restarting.');
         if(app.documents.length)throw Error('Close your open Photoshop documents before starting this batch.');
         if(!queue.entries.length)throw Error('No padded images with known geometry are queued.');

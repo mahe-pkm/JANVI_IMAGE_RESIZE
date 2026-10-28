@@ -14,7 +14,8 @@ def clean_product_name(folder_name: str) -> str:
     """
     Returns the folder name directly as the product name.
     """
-    name = re.sub(r'[\s_-]+selected(?:[\s_-]+images?)?(?:\s*\(\d+\))?$', '', folder_name.strip(), flags=re.IGNORECASE).strip(' _-')
+    name = re.sub(r'^[\s_-]*selected[\s_-]+', '', folder_name.strip(), flags=re.IGNORECASE)
+    name = re.sub(r'[\s_-]+selected(?:[\s_-]+images?)?(?:\s*\(\d+\))?$', '', name, flags=re.IGNORECASE).strip(' _-')
     return name or folder_name.strip()
 
 def get_export_folders(src_dir) -> list:

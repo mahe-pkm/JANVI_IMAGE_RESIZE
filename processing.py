@@ -7,7 +7,7 @@ import shutil
 import uuid
 from PIL import Image, ImageOps
 from subject_aware_resize import smart_crop_and_resize, crop_decision, TARGET_W, TARGET_H
-from photoshop_repair import update_padding_queue
+from photoshop_repair import update_padding_queue, workspace
 
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
@@ -25,7 +25,7 @@ def validate_paths(source, destination=None, folder=""):
     destination = Path(destination).resolve() if destination else source.with_name(source.name + "_resized")
     if destination == source or destination.is_relative_to(source) or source.is_relative_to(destination):
         raise ValueError("Source and output must be separate folders; neither may contain the other.")
-    if any((root / '.janvi-photoshop-running').exists() for root in (source, destination)):
+    if any((workspace(root) / '.janvi-photoshop-running').exists() for root in (source, destination)):
         raise ValueError('A Photoshop padding repair may be active in this folder. Finish or cancel it before starting another operation.')
     return source, selected, destination
 
@@ -91,8 +91,18 @@ def run_images(job, kind, source, destination, folder, device_id, target_width=T
         detector.close()
         if kind == "resize":
             destination.mkdir(parents=True, exist_ok=True)
+            queue_dir = workspace(destination)
+            queue_dir.mkdir(exist_ok=True)
+            # Preserve the selected root as product identity only when images
+            # are directly in that root. Stage names must never become exports.
+            direct_root_files = any(Path(record['file']).parent == Path('.') for record in records
+                                    if record['status'] == 'ok')
+            (queue_dir / 'layout.json').write_text(json.dumps({
+                'schema_version': 1,
+                'direct_root_product_name': source.name if direct_root_files else None,
+            }, indent=2), encoding='utf-8')
             # Preserve the gallery index when a job was cancelled partway through.
-            patch = destination / "manual_patch_list.md"
+            patch = queue_dir / "manual_patch_list.md"
             existing = set()
             if patch.exists():
                 existing = {line[3:-1].replace("\\", "/") for line in patch.read_text(encoding="utf-8").splitlines()
@@ -101,8 +111,8 @@ def run_images(job, kind, source, destination, folder, device_id, target_width=T
             existing.difference_update(successful)
             existing.update(padded)
             update_padding_queue(destination, records, job.data['job_id'], existing)
-            job.log(f'Photoshop padding script: {destination / "Repair_Padding.jsx"}')
-            (destination / f"job-{job.data['job_id']}.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
+            job.log(f'Photoshop padding script: {queue_dir / "Repair_Padding.jsx"}')
+            (queue_dir / f"job-{job.data['job_id']}.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
     return {"total": len(files), "padded": len(padded), "succeeded": job.data["succeeded"], "failed": job.data["failed"]}
 
 
@@ -116,7 +126,8 @@ def copy_folder_structure(job, source, destination):
         job.check_cancel()
         current = Path(root)
         dirs[:] = [name for name in dirs
-                   if not (current / name).is_symlink()
+                   if name != '.janvi'
+                   and not (current / name).is_symlink()
                    and (current / name).resolve().is_relative_to(source)]
         target = destination / current.relative_to(source)
         if not target.resolve().is_relative_to(destination):
@@ -127,6 +138,18 @@ def copy_folder_structure(job, source, destination):
 def file_digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').digest()
+
+
+def direct_root_product_name(source):
+    """Read a product identity carried forward by the guided workflow."""
+    layout = workspace(source) / 'layout.json'
+    if not layout.is_file():
+        return None
+    try:
+        value = json.loads(layout.read_text(encoding='utf-8')).get('direct_root_product_name')
+    except (OSError, ValueError, TypeError):
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def export_plan(source, destination, mode):
@@ -148,6 +171,7 @@ def export_plan(source, destination, mode):
             candidates.append(file)
     candidates.sort(key=lambda p: str(p.relative_to(source)))
     from move_to_shopify import get_product_name_for_folder, clean_product_name
+    root_product_name = direct_root_product_name(source) if mode == 'native' else None
     counts, entries, reserved = {}, [], set()
     for file in candidates:
         folder = file.parent
@@ -158,7 +182,12 @@ def export_plan(source, destination, mode):
         else:
             product_folder = folder.parent if folder.name.casefold() == 'untitled export' else folder
             relative_dir = product_folder.relative_to(source) if product_folder.is_relative_to(source) else Path('.')
-            name = get_product_name_for_folder(folder, source)
+            if relative_dir == Path('.') and root_product_name:
+                name = clean_product_name(root_product_name) or 'Product'
+            elif relative_dir == Path('.') and source.name.casefold() in {'with logo', 'resized', 'final for shopify'}:
+                raise ValueError('This stage folder has no saved product identity. Export from the guided workflow after resizing, or choose the product folder instead.')
+            else:
+                name = get_product_name_for_folder(folder, source)
         key = (str(relative_dir).casefold(), name.casefold(), file.suffix.casefold())
         counts[key] = counts.get(key, 0) + 1
         relative_output = relative_dir / f'{name}_{counts[key]}{file.suffix.lower()}'

@@ -7,7 +7,7 @@ import threading
 import urllib.parse
 import io
 from jobs import Jobs
-from photoshop_repair import repair_status, SCRIPT
+from photoshop_repair import repair_status, SCRIPT, workspace, queue_workspace
 from processing import images_under, run_images, run_export, export_plan, export_signature, validate_paths
 from logo_processing import (DEFAULTS, asset_path, list_assets, list_presets, read_logo,
                              render, run_logo, save_asset, save_preset, settings_for, source_image)
@@ -340,7 +340,7 @@ def get_patch_list():
         else:
             dest_dir_path = Path(dest_dir)
             
-        list_path = dest_dir_path / "manual_patch_list.md"
+        list_path = workspace(dest_dir_path) / "manual_patch_list.md"
         items = []
         if list_path.exists():
             with open(list_path, "r", encoding="utf-8") as f:
@@ -389,7 +389,7 @@ def photoshop_status():
 @app.get('/api/photoshop/script')
 def photoshop_script():
     destination = Path(request.args.get('dest_dir') or last_dest_dir).resolve()
-    script = destination / SCRIPT
+    script = queue_workspace(destination) / SCRIPT
     if not script.is_file():
         return jsonify(error='No generated Photoshop script. Complete resizing first.'), 404
     return send_file(script, as_attachment=True, download_name=SCRIPT)

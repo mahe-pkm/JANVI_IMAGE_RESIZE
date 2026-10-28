@@ -12,7 +12,7 @@ delete powershellEnv.PSModulePath;
 const backend = process.env.JANVI_BACKEND_ROOT || path.join(process.resourcesPath, 'backend');
 const stateFile = path.join(backend, 'data', 'server.json');
 const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-let mainWindow, origin = '', ready = false, closing = false;
+let mainWindow, splashWindow, origin = '', ready = false, closing = false;
 let pickerOpen = false;
 let repairProcess = null;
 let repairLaunchTime = 0;
@@ -49,6 +49,30 @@ function authorized(event) {
   catch (_) { return false; }
 }
 
+function createStartupScreen() {
+  const markup = `<!doctype html><html><head><meta charset="utf-8"><style>
+    *{box-sizing:border-box} body{margin:0;background:#17191b;color:#f7f1e5;font-family:"Segoe UI",sans-serif;overflow:hidden}
+    main{height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 78% 15%,#3e3320 0,transparent 32%),radial-gradient(circle at 15% 90%,#20343a 0,transparent 34%),#17191b}
+    section{width:390px;text-align:center}.mark{width:68px;height:68px;margin:0 auto 22px;border:1px solid #d6ad65;border-radius:17px;display:grid;place-items:center;color:#e6bf78;font:bold 30px Georgia;box-shadow:0 0 0 8px #d6ad6510;animation:rise .7s ease-out both}
+    h1{margin:0;font:600 25px Georgia,serif;letter-spacing:.3px}.label{margin:9px 0 30px;color:#d6ad65;font-size:10px;font-weight:700;letter-spacing:2px}.track{height:3px;border-radius:4px;background:#ffffff18;overflow:hidden}.track i{display:block;width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,transparent,#e5bd76,transparent);animation:load 1.45s ease-in-out infinite}.status{min-height:24px;margin:16px 0 0;color:#c8ccd0;font-size:13px}@keyframes load{from{transform:translateX(-115%)}to{transform:translateX(340%)}}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  </style></head><body><main><section><div class="mark">J</div><h1>Janvi Image Studio</h1><div class="label">LOCAL IMAGE WORKSPACE</div><div class="track"><i></i></div><p id="status" class="status">Preparing local image tools…</p></section></main></body></html>`;
+  splashWindow = new BrowserWindow({width: 500, height: 340, frame: false, resizable: false, movable: true,
+    alwaysOnTop: true, center: true, show: false, backgroundColor: '#17191b',
+    webPreferences: {contextIsolation: true, nodeIntegration: false, sandbox: true}});
+  splashWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(markup));
+  splashWindow.once('ready-to-show', () => splashWindow && splashWindow.show());
+}
+
+function startupMessage(message) {
+  if (!splashWindow || splashWindow.isDestroyed()) return;
+  splashWindow.webContents.executeJavaScript(`document.getElementById('status').textContent=${JSON.stringify(message)};`).catch(() => {});
+}
+
+function closeStartupScreen() {
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+  splashWindow = null;
+}
+
 async function startBackend() {
   const script = path.join(backend, 'Start.ps1');
   if (!fs.existsSync(script)) throw new Error('Bundled processing backend is missing.');
@@ -58,6 +82,7 @@ async function startBackend() {
   let port;
   try { port = await availablePort(preferred); } catch (_) { port = await availablePort(0); }
   let output = '';
+  startupMessage('Preparing bundled offline runtime…');
   await new Promise((resolve, reject) => {
     const child = spawn(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Offline', '-NoBrowser', '-Port', String(port)], {cwd: backend, windowsHide: true, env: powershellEnv});
     child.stdout.on('data', data => { output = (output + data.toString()).slice(-5000); });
@@ -65,6 +90,7 @@ async function startBackend() {
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolve() : reject(new Error(`Backend setup failed (${code}).\n${output}`)));
   });
+  startupMessage('Checking local workspace…');
   const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
   const url = new URL(state.url);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port) throw new Error('Backend returned an invalid local address.');
@@ -72,6 +98,7 @@ async function startBackend() {
   fs.writeFileSync(portFile, JSON.stringify({port: Number(url.port)}));
   const health = await requestJson(origin + '/api/health');
   if (health.app !== 'janvi-image-resize' || !health.ready) throw new Error('Backend is not ready.');
+  startupMessage('Opening your workspace…');
 }
 
 async function stopBackend() {
@@ -87,8 +114,10 @@ async function main() {
   });
   await app.whenReady();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  createStartupScreen();
   mainWindow = new BrowserWindow({width: 1440, height: 960, minWidth: 850, minHeight: 600, title: 'Janvi Image Studio',
     backgroundColor: '#1c1e20', icon: path.join(__dirname, 'janvi-app.ico'),
+    show: false,
     webPreferences: {preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true}});
   mainWindow.setMenuBarVisibility(false);
   mainWindow.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
@@ -126,13 +155,15 @@ async function main() {
   ipcMain.handle('photoshop-repair', async (event, directory) => {
     if (!authorized(event) || typeof directory !== 'string') throw new Error('Invalid folder request.');
     if (repairProcess || Date.now() - repairLaunchTime < 60000) throw new Error('A Photoshop repair was just launched. Check Photoshop for its script confirmation before starting again.');
-    const root = path.resolve(directory), script = path.join(root, 'Repair_Padding.jsx');
-    if (!fs.existsSync(path.join(root, 'padding_manifest.json')) || !fs.statSync(script).isFile()) throw new Error('No generated Photoshop repair queue was found in this folder.');
+    const root = path.resolve(directory);
     const status = await requestJson(origin + '/api/photoshop/status?' + new URLSearchParams({dest_dir: root}));
+    const script = status.script, queue = script ? path.dirname(script) : '';
+    const relativeQueue = queue ? path.relative(root, queue) : '..';
+    if (!queue || (relativeQueue && relativeQueue.startsWith('..')) || !fs.existsSync(path.join(queue, 'padding_manifest.json')) || !fs.statSync(script).isFile()) throw new Error('No generated Photoshop repair queue was found in this folder.');
     if (!status.valid_script || !status.total) throw new Error('The Photoshop script does not match the generated queue, or the queue is empty. Regenerate it by resizing.');
-    if (fs.existsSync(path.join(root, '.janvi-photoshop-running'))) throw new Error('This Photoshop queue is already running.');
+    if (fs.existsSync(path.join(queue, '.janvi-photoshop-running'))) throw new Error('This Photoshop queue is already running.');
     const launcher = path.join(backend, 'photoshop', 'Start_Photoshop_Repair.ps1');
-    const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-File', launcher, '-QueueDirectory', root], {windowsHide: true, env: powershellEnv});
+    const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-File', launcher, '-QueueDirectory', queue], {windowsHide: true, env: powershellEnv});
     repairProcess = child;
     repairLaunchTime = Date.now();
     const previous = JSON.stringify(status.report || {});
@@ -148,9 +179,20 @@ async function main() {
     child.on('exit', code => { repairProcess=null; if (code) { clearTimeout(timer); repairLaunchTime=0; if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('photoshop-launch-error', stderr || `Photoshop launch failed (${code}).`); } });
     return true;
   });
-  await mainWindow.loadURL('data:text/html,<body style="background:%231c1e20;color:white;font:16px Segoe UI;padding:40px">Starting Janvi Image Studio. First-time setup may take a few minutes.</body>');
-  try { await startBackend(); ready = true; await mainWindow.loadURL(origin + '/'); }
-  catch (error) { dialog.showErrorBox('Janvi Image Studio could not start', error.message); closing = true; mainWindow.close(); }
+  try {
+    await startBackend();
+    ready = true;
+    const pageReady = new Promise(resolve => mainWindow.webContents.once('did-finish-load', resolve));
+    await mainWindow.loadURL(origin + '/');
+    await pageReady;
+    mainWindow.show();
+    closeStartupScreen();
+  }
+  catch (error) {
+    startupMessage('Janvi could not start. Showing details…');
+    dialog.showErrorBox('Janvi Image Studio could not start', error.message);
+    closeStartupScreen(); closing = true; mainWindow.close();
+  }
 }
 app.on('window-all-closed', () => app.quit());
 main().catch(error => { dialog.showErrorBox('Janvi Image Studio could not start', error.message); app.quit(); });

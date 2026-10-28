@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -117,7 +118,8 @@ class PortableTests(unittest.TestCase):
         for name in ('one.png', 'two.png'):
             Image.new('RGB', (12, 18)).save(product / name)
             Image.new('RGB', (12, 18)).save(resized / name)
-        (self.output / 'manual_patch_list.md').write_text('- `Product/one.png`\n', encoding='utf-8')
+        (self.output / '.janvi').mkdir()
+        (self.output / '.janvi' / 'manual_patch_list.md').write_text('- `Product/one.png`\n', encoding='utf-8')
         response = app.test_client().get('/api/patch-list', query_string={'root_dir': str(self.source), 'dest_dir': str(self.output), 'all': '1'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['padded_count'], 1)
@@ -170,6 +172,24 @@ class PortableTests(unittest.TestCase):
         job.start('export', lambda worker: run_export(worker, self.source, self.output, 'native'))
         self.assertEqual(self.wait(job)['status'], 'completed_with_errors')
         self.assertEqual(target.read_bytes(), b'keep existing file')
+
+    def test_export_uses_original_product_name_for_direct_images_in_with_logo(self):
+        source = self.root / 'With Logo'
+        source.mkdir()
+        Image.new('RGB', (10, 10), 'white').save(source / 'front.jpg')
+        (source / '.janvi').mkdir()
+        (source / '.janvi' / 'layout.json').write_text(json.dumps({
+            'schema_version': 1, 'direct_root_product_name': 'Selected Rose Garden'
+        }), encoding='utf-8')
+        _, _, plan = export_plan(source, self.output, 'native')
+        self.assertEqual(plan[0]['output'], 'Rose Garden_1.jpg')
+
+    def test_export_rejects_stage_folder_without_product_identity(self):
+        source = self.root / 'With Logo'
+        source.mkdir()
+        Image.new('RGB', (10, 10), 'white').save(source / 'front.jpg')
+        with self.assertRaisesRegex(ValueError, 'no saved product identity'):
+            export_plan(source, self.output, 'native')
 
     def test_lightroom_preview_api_and_native_mode(self):
         product = self.source / 'Date' / 'Dress'

@@ -1,4 +1,4 @@
-# Janvi Image Studio 0.6.3 — Windows x64 desktop edition
+# Janvi Image Studio 0.6.4 — Windows x64 desktop edition
 
 Install the MSI, then open **Janvi Image Studio** from the Start menu or desktop.
 The ZIP alternative must be extracted completely into a writable local folder;
@@ -16,7 +16,9 @@ The portable ZIP has `janvi.cmd` in its root; use its full path from another fol
 Bare `janvi` in Explorer's address bar is not claimed to pass the visible folder.
 
 First launch installs the bundled Python runtime and wheels offline. No separate
-Python or Node installation is needed. Allow a few minutes for the first setup.
+Python or Node installation is needed. A branded Janvi startup screen stays open
+with progress text while local setup runs, instead of showing a blank window.
+Allow a few minutes for the first setup.
 The app stores its private runtime, image folders, presets and job reports under
 `resources/backend/`. Keep the full folder together when using the ZIP.
 
@@ -41,8 +43,9 @@ GPU widget to open processing settings. GPU readings show total adapter use.
 Unavailable or stale readings are cleared instead of displayed as current data.
 
 After resizing, Review includes Photoshop padding repair. Resizing generates
-`manual_patch_list.md` with exact bounds, `padding_manifest.json`, and one
-`Repair_Padding.jsx` beside your resized images. Run the generated script from
+the `.janvi` companion folder with `manual_patch_list.md`, exact bounds,
+`padding_manifest.json`, and one `Repair_Padding.jsx`. The companion folder is
+kept separate from the image hierarchy. Run the generated script from
 Photoshop's File > Scripts > Browse, or use **Open Photoshop & Repair** in the
 desktop window. The button selects a single regular Photoshop installation;
 save and close a different version such as Beta first. Photoshop asks whether
@@ -61,3 +64,6 @@ Supported package target: Intel/AMD Windows x64. Other PCs and GPU drivers still
 need hardware testing. This package is unsigned. The code and packaging tools do
 not install a GPU driver. Component notices are in the backend folder and the
 Electron license files included beside the executable.
+
+See `resources/backend/docs/INSTALLATION.md` for full first-install, update,
+Photoshop, Smart App Control and troubleshooting guidance.

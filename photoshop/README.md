@@ -21,8 +21,9 @@ The direct launcher and the installed desktop button completed a synthetic
 1-image repair on regular Photoshop 27.11.0, including its native script
 confirmation. The installed workflow continued through logo placement and export.
 
-1. Complete resizing in Janvi. The resized folder contains `manual_patch_list.md`,
-   `padding_manifest.json` and one generated `Repair_Padding.jsx`.
+1. Complete resizing in Janvi. The resized folder has a `.janvi` companion folder
+   containing `manual_patch_list.md`, `padding_manifest.json` and one generated
+   `Repair_Padding.jsx`; product image folders remain clean.
 2. Open Review in Janvi to see the script path and its status. Close other
    Photoshop documents, then use **File > Scripts > Browse** in Photoshop to run
    the generated script. A downloaded copy can locate the original output folder
@@ -66,7 +67,7 @@ are not newly admitted into the queue.
   changed or unsupported files stop the queue for attention. Correct the cause
   and rerun; completed images are not submitted again.
 - If Photoshop crashes, close it fully before clearing the empty
-  `.janvi-photoshop-running` lock folder in the resized output. Keep the report,
+  `.janvi/.janvi-photoshop-running` lock folder in the resized output. Keep the report,
   any `.hold` file and recovery copies; the next run can restore an interrupted
   rename when the checkpoint records that transaction. Do not clear the lock
   while a Photoshop run might still be active.

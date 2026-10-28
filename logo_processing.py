@@ -273,6 +273,13 @@ def run_logo(job, base, source, destination, asset_id, settings):
     files = images_under(source)
     job.update(total=len(files), phase="Preparing folders", device={"name": "CPU", "provider": "cpu"})
     copy_folder_structure(job, source, destination)
+    # Carry workflow-only metadata forward without copying repair scripts or
+    # reports into the image hierarchy.
+    source_layout = source / '.janvi' / 'layout.json'
+    if source_layout.is_file():
+        destination_workspace = destination / '.janvi'
+        destination_workspace.mkdir(exist_ok=True)
+        shutil.copy2(source_layout, destination_workspace / 'layout.json')
     job.update(phase="Processing")
     for file in files:
         job.check_cancel()

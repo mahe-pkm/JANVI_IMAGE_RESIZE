@@ -3,6 +3,20 @@
 User-visible changes to Janvi Image Studio. Earlier versions below were local
 development builds; 0.6.3 is the first GitHub desktop release from this checkout.
 
+## [0.6.4] - 2026-10-28
+
+### Added
+- Branded native startup screen with local runtime and workspace status, replacing
+  the blank first-launch window.
+- Offline installation, update, Photoshop and troubleshooting guide.
+
+### Changed
+- New Photoshop repair queues and workflow metadata now live in `Resized\\.janvi`
+  rather than beside product image folders. Existing root-level queues remain
+  usable.
+- Shopify export carries direct-folder product identity through the workflow and
+  rejects generic stage-folder names when that identity is unavailable.
+
 ## [0.6.3] - 2026-10-28
 
 ### Added

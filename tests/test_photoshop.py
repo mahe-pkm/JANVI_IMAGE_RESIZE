@@ -6,7 +6,7 @@ import unittest
 
 from PIL import Image
 from subject_aware_resize import smart_crop_and_resize, padding_geometry, crop_decision
-from photoshop_repair import update_padding_queue, repair_status, checksum
+from photoshop_repair import update_padding_queue, repair_status, checksum, workspace
 
 
 class PhotoshopQueueTests(unittest.TestCase):
@@ -73,11 +73,11 @@ class PhotoshopQueueTests(unittest.TestCase):
             manifest = update_padding_queue(root, [record], 'test-job', {relative, 'legacy.jpg'})
             self.assertEqual(manifest['entries'][0]['sha256'], checksum(image))
             self.assertEqual(manifest['missing_geometry'], ['legacy.jpg'])
-            self.assertIn(f'- `{relative}`\n', (root / 'manual_patch_list.md').read_text(encoding='utf-8'))
-            self.assertIn('left 100 px', (root / 'manual_patch_list.md').read_text(encoding='utf-8'))
-            self.assertTrue((root / 'Start_Photoshop_Repair.cmd').is_file())
-            self.assertTrue((root / 'Start_Photoshop_Repair.ps1').is_file())
-            self.assertNotIn('/*__JANVI_QUEUE__*/null', (root / 'Repair_Padding.jsx').read_text(encoding='utf-8'))
+            self.assertIn(f'- `{relative}`\n', (workspace(root) / 'manual_patch_list.md').read_text(encoding='utf-8'))
+            self.assertIn('left 100 px', (workspace(root) / 'manual_patch_list.md').read_text(encoding='utf-8'))
+            self.assertTrue((workspace(root) / 'Start_Photoshop_Repair.cmd').is_file())
+            self.assertTrue((workspace(root) / 'Start_Photoshop_Repair.ps1').is_file())
+            self.assertNotIn('/*__JANVI_QUEUE__*/null', (workspace(root) / 'Repair_Padding.jsx').read_text(encoding='utf-8'))
             state = repair_status(root)
             self.assertEqual((state['total'], state['missing_geometry']), (1, 1))
 
@@ -98,9 +98,9 @@ class PhotoshopQueueTests(unittest.TestCase):
             Image.new('RGB', (1200, 1800)).save(root / 'image.png')
             record = dict(file='image.png', status='ok', padded=True, geometry=padding_geometry(100, 0, 1000, 1800))
             manifest = update_padding_queue(root, [record], 'test', {'image.png'})
-            (root / manifest['report']).write_text(json.dumps(dict(status='completed', items=[dict(file='image.png', status='done')])) )
+            (workspace(root) / manifest['report']).write_text(json.dumps(dict(status='completed', items=[dict(file='image.png', status='done')])) )
             self.assertEqual(repair_status(root)['report']['status'], 'completed')
-            self.assertIn('- `image.png`', (root / 'manual_patch_list.md').read_text())
+            self.assertIn('- `image.png`', (workspace(root) / 'manual_patch_list.md').read_text())
 
     def test_review_api_serves_generated_script_and_completion_report(self):
         from app import app
@@ -117,8 +117,8 @@ class PhotoshopQueueTests(unittest.TestCase):
             download = client.get('/api/photoshop/script', query_string=dict(dest_dir=str(root)))
             self.assertEqual(download.status_code, 200)
             self.assertIn('attachment', download.headers['Content-Disposition'])
-            self.assertEqual(download.data, (root / 'Repair_Padding.jsx').read_bytes())
-            (root / 'Repair_Padding.jsx').write_text('unexpected code', encoding='utf-8')
+            self.assertEqual(download.data, (workspace(root) / 'Repair_Padding.jsx').read_bytes())
+            (workspace(root) / 'Repair_Padding.jsx').write_text('unexpected code', encoding='utf-8')
             self.assertFalse(client.get('/api/photoshop/status', query_string=dict(dest_dir=str(root))).json['valid_script'])
             download.close()
 
@@ -129,6 +129,18 @@ class PhotoshopQueueTests(unittest.TestCase):
             self.assertFalse(client.get('/api/photoshop/status', query_string=dict(dest_dir=directory)).json['available'])
             self.assertEqual(client.get('/api/photoshop/script', query_string=dict(dest_dir=directory)).status_code, 404)
 
+    def test_existing_root_queue_remains_readable_after_workspace_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            Image.new('RGB', (1200, 1800)).save(root / 'image.png')
+            record = dict(file='image.png', status='ok', padded=True, geometry=padding_geometry(100, 0, 1000, 1800))
+            update_padding_queue(root, [record], 'test', {'image.png'})
+            queue = workspace(root)
+            for file in queue.iterdir():
+                file.replace(root / file.name)
+            queue.rmdir()
+            self.assertTrue(repair_status(root)['valid_script'])
+
     def test_processing_rejects_photoshop_locked_folders(self):
         from processing import validate_paths
         with tempfile.TemporaryDirectory() as directory:
@@ -136,7 +148,7 @@ class PhotoshopQueueTests(unittest.TestCase):
             source, output = root / 'input', root / 'output'
             source.mkdir()
             output.mkdir()
-            (source / '.janvi-photoshop-running').mkdir()
+            (workspace(source) / '.janvi-photoshop-running').mkdir(parents=True)
             with self.assertRaisesRegex(ValueError, 'Photoshop'):
                 validate_paths(source, output)
 

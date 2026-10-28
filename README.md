@@ -15,7 +15,7 @@ logo placement, and organised Shopify image exports.
 ![Inference](https://img.shields.io/badge/inference-ONNX_Runtime-405d60)
 
 [Download](https://github.com/mahe-pkm/JANVI_IMAGE_RESIZE/releases/latest) ·
-[Quick start](#quick-start) · [Requirements](docs/REQUIREMENTS.md) ·
+[Quick start](#quick-start) · [Installation](docs/INSTALLATION.md) · [Requirements](docs/REQUIREMENTS.md) ·
 [Changelog](CHANGELOG.md) · [Build from source](docs/DEVELOPMENT.md)
 
 <img src="docs/assets/workspace-preview.svg" width="1200" alt="Illustrated Janvi workspace with guided steps, hardware widgets, synthetic product preview, thumbnails and Photoshop repair controls">
@@ -33,8 +33,9 @@ logo placement, and organised Shopify image exports.
 The **portable ZIP** is the alternative: extract the entire archive into a writable
 local folder and open **Janvi Image Studio.exe**. Keep all extracted files together.
 Both packages include Python and dependencies for offline setup. You do **not**
-need separate Python, Node.js, Git, Docker, or CUDA installations. First launch
-prepares the private runtime and may take a few minutes.
+need separate Python, Node.js, Git, Docker, or CUDA installations. A branded
+startup screen explains local setup progress on first launch rather than showing
+a blank window. See the detailed [installation and troubleshooting guide](docs/INSTALLATION.md).
 
 After MSI installation, open a **new terminal** in your image folder:
 
@@ -92,15 +93,16 @@ clean second PC still need acceptance testing. See [requirements](docs/REQUIREME
 
 ## Photoshop cleanup
 
-Resizing records exact padding bounds and creates these files beside the resized images:
+Resizing records exact padding bounds in a Janvi-only companion folder:
 
 ```text
 Resized/
-├── manual_patch_list.md
-├── padding_manifest.json
-├── Repair_Padding.jsx
-├── Start_Photoshop_Repair.cmd
-├── Start_Photoshop_Repair.ps1
+├── .janvi/
+│   ├── manual_patch_list.md
+│   ├── padding_manifest.json
+│   ├── Repair_Padding.jsx
+│   ├── Start_Photoshop_Repair.cmd
+│   └── Start_Photoshop_Repair.ps1
 └── <your product folders and images>
 ```
 
@@ -125,6 +127,7 @@ JSX. Review repairs before logo placement. See [compatibility and recovery](phot
 ```text
 Collection_output/
 ├── Resized/
+│   ├── .janvi/                  # Repair queue, reports and workflow metadata
 │   └── Selected Rose Garden/
 ├── With Logo/
 │   └── Selected Rose Garden/
@@ -138,6 +141,9 @@ Product folder hierarchy is preserved. Export filenames use the product folder
 name with `Selected ` and supported selected-image suffixes removed. Export
 includes supported images, not logs or manifests. Lightroom mode selects images
 from `Untitled Export`; those images are placed in their parent product folder.
+For a direct-image product folder, Janvi carries that selected folder name through
+the stages, so an intermediate `With Logo` folder can never become the Shopify
+filename prefix.
 This is a **local file export**, not an upload to Shopify.
 
 | Operation | Existing-file behaviour |
@@ -164,6 +170,7 @@ equivalence has not been established.
 | --- | --- |
 | [Development](docs/DEVELOPMENT.md) | Python setup, Electron shell, tests and source map. |
 | [Requirements](docs/REQUIREMENTS.md) | End-user, developer, GPU and Photoshop requirements. |
+| [Installation](docs/INSTALLATION.md) | First install, updates, Photoshop and troubleshooting. |
 | [Build and release](docs/BUILD_AND_RELEASE.md) | Offline assets, packaging, checksums and GitHub delivery. |
 | [Changelog](CHANGELOG.md) | Versioned application changes. |
 | [Verification](desktop/VERIFICATION.md) | Actual checks and remaining validation limits. |

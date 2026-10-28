@@ -2,7 +2,7 @@ param([string]$PhotoshopPath, [string]$QueueDirectory = $PSScriptRoot)
 $ErrorActionPreference = 'Stop'
 try {
     $scriptPath = Join-Path $QueueDirectory 'Repair_Padding.jsx'
-    if (!(Test-Path -LiteralPath $scriptPath -PathType Leaf)) { throw 'Repair_Padding.jsx is missing. Keep these files together in the resized folder.' }
+    if (!(Test-Path -LiteralPath $scriptPath -PathType Leaf)) { throw 'Repair_Padding.jsx is missing. Keep the .janvi repair workspace beside the resized images.' }
     if (!$PhotoshopPath) {
         $adobe = Join-Path $env:ProgramFiles 'Adobe'
         $candidates = @(Get-ChildItem -LiteralPath $adobe -Directory -ErrorAction SilentlyContinue |
