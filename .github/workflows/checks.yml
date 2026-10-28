@@ -45,7 +45,7 @@ jobs:
             throw 'Model checksum mismatch'
           }
           $package = Get-Content desktop/package.json -Raw | ConvertFrom-Json
-          $lock = Get-Content desktop/package-lock.json -Raw | ConvertFrom-Json
-          if ($package.version -ne $lock.version -or $package.version -ne $lock.packages.''.version) {
+          $lock = Get-Content desktop/package-lock.json -Raw | ConvertFrom-Json -AsHashtable
+          if ($package.version -ne $lock.version -or $package.version -ne $lock['packages']['']['version']) {
             throw 'Desktop versions disagree'
           }
