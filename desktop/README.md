@@ -1,4 +1,6 @@
-# Janvi Image Studio 0.6.4 — Windows x64 desktop edition
+# Janvi Image Studio 0.6.5 — Windows x64 desktop edition
+
+Built for Buzl.
 
 Install the MSI, then open **Janvi Image Studio** from the Start menu or desktop.
 The ZIP alternative must be extracted completely into a writable local folder;

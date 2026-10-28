@@ -3,6 +3,12 @@
 User-visible changes to Janvi Image Studio. Earlier versions below were local
 development builds; 0.6.3 is the first GitHub desktop release from this checkout.
 
+## [0.6.5] - 2026-10-28
+
+### Changed
+- Added a visible **Built for Buzl** credit to the desktop workspace, startup
+  screen and project documentation.
+
 ## [0.6.4] - 2026-10-28
 
 ### Added

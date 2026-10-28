@@ -6,6 +6,8 @@
 
 **Prepare product images. Keep the subject. Finish the collection.**
 
+<sub>Built for Buzl.</sub>
+
 A Windows desktop workspace for subject-aware resizing, Photoshop padding repair,
 logo placement, and organised Shopify image exports.
 
