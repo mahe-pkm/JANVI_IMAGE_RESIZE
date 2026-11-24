@@ -3,6 +3,21 @@
 User-visible changes to Janvi Image Studio. Earlier versions below were local
 development builds; 0.6.3 is the first GitHub desktop release from this checkout.
 
+## [0.6.7] - 2026-11-24
+
+### Added
+- Separate Windows x64 **Local Server** ZIP. It launches the same local Janvi
+  workspace in the default browser through a loopback-only `127.0.0.1` service.
+- Branded charcoal-and-gold Janvi Server Console with browser/reopen and safe
+  stop controls, plus dedicated start/stop launchers, browser-package
+  instructions and reproducible Local Server build tool.
+- Local launcher checksum verification now uses built-in .NET APIs so it also
+  works where older Windows PowerShell does not provide `Get-FileHash`.
+
+### Notes
+- The Local Server release is unsigned, like the desktop release. It is a
+  browser interface, not a hosted or cloud image-processing service.
+
 ## [0.6.5] - 2026-10-28
 
 ### Changed

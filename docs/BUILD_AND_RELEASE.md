@@ -53,6 +53,17 @@ Run the [development checks](DEVELOPMENT.md#checks), then:
 .\.venv\Scripts\python.exe tools/build_desktop.py
 ```
 
+To build the separate browser-based Local Server ZIP, run:
+
+```powershell
+.\.venv\Scripts\python.exe tools/build_local_server.py
+```
+
+Its version is in `local-server.json`. It packages the loopback-only Flask/
+Waitress service, offline runtime, models and the `START_JANVI_LOCAL_SERVER.cmd`
+launcher. It does not produce an MSI and does not replace the Electron desktop
+MSI or portable ZIP.
+
 Expected outputs:
 
 ```text

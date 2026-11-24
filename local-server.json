@@ -1,0 +1,6 @@
+{
+  "productName": "Janvi Image Studio Local Server",
+  "version": "0.6.7",
+  "platform": "windows-x64",
+  "browserUrl": "http://127.0.0.1:<automatic-port>"
+}

@@ -3,6 +3,19 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $taskRoot = $PSScriptRoot
 Set-Location -LiteralPath $taskRoot
+
+function Get-JanviFileHash {
+    param([Parameter(Mandatory = $true)][string]$FilePath)
+    $stream = [System.IO.File]::OpenRead($FilePath)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($hasher.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') })
+    } finally {
+        $hasher.Dispose()
+        $stream.Dispose()
+    }
+}
+
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
     throw 'This package supports x64 Intel/AMD Windows PCs. ARM64 needs a separate package.'
 }
@@ -29,7 +42,7 @@ if (Test-Path -LiteralPath $taskServerFile) {
     }
 }
 $taskRequirements = Join-Path $taskRoot 'requirements.txt'
-$taskFingerprint = (Get-FileHash -LiteralPath $taskRequirements -Algorithm SHA256).Hash
+$taskFingerprint = Get-JanviFileHash $taskRequirements
 $taskStamp = Join-Path $taskRuntime 'installed.sha256'
 if (-not (Test-Path -LiteralPath $taskPython)) {
     $taskArchive = Join-Path $taskRoot 'runtime-python.zip'
@@ -43,13 +56,13 @@ if (-not (Test-Path -LiteralPath $taskPython)) {
         # The package manifest pins the redistributable and verifies it before extraction.
         $taskManifest = Get-Content -Raw -LiteralPath (Join-Path $taskRoot 'runtime-manifest.json') | ConvertFrom-Json
         Invoke-WebRequest -UseBasicParsing -Uri $taskManifest.url -OutFile "$taskArchive.partial"
-        if ((Get-FileHash -LiteralPath "$taskArchive.partial" -Algorithm SHA256).Hash -ne $taskManifest.sha256) {
+        if ((Get-JanviFileHash "$taskArchive.partial") -ne $taskManifest.sha256) {
             throw 'Python download checksum mismatch.'
         }
         Move-Item -LiteralPath "$taskArchive.partial" -Destination $taskArchive -Force
     }
     $taskManifest = Get-Content -Raw -LiteralPath (Join-Path $taskRoot 'runtime-manifest.json') | ConvertFrom-Json
-    if ((Get-FileHash -LiteralPath $taskArchive -Algorithm SHA256).Hash -ne $taskManifest.sha256) {
+    if ((Get-JanviFileHash $taskArchive) -ne $taskManifest.sha256) {
         throw 'Python archive checksum mismatch.'
     }
     Expand-Archive -LiteralPath $taskArchive -DestinationPath $taskRuntime -Force
@@ -61,7 +74,7 @@ if (-not (Test-Path -LiteralPath $taskRedist)) { $taskRedist = Join-Path $taskRo
 if (Test-Path -LiteralPath $taskRedist) {
     foreach ($taskDll in (Get-ChildItem -LiteralPath $taskRedist -Filter '*.dll')) {
         $taskDllTarget = Join-Path $taskRuntime $taskDll.Name
-        if (-not (Test-Path -LiteralPath $taskDllTarget) -or (Get-FileHash -LiteralPath $taskDll.FullName).Hash -ne (Get-FileHash -LiteralPath $taskDllTarget).Hash) {
+        if (-not (Test-Path -LiteralPath $taskDllTarget) -or (Get-JanviFileHash $taskDll.FullName) -ne (Get-JanviFileHash $taskDllTarget)) {
             Copy-Item -LiteralPath $taskDll.FullName -Destination $taskDllTarget -Force
         }
     }
@@ -86,7 +99,7 @@ if ($Repair -or -not (Test-Path -LiteralPath $taskStamp) -or (Get-Content -Raw -
             Invoke-WebRequest -UseBasicParsing -Uri $taskWheel.url -OutFile "$taskWheelPath.partial"
             Move-Item -LiteralPath "$taskWheelPath.partial" -Destination $taskWheelPath -Force
         }
-        if ((Get-FileHash -LiteralPath $taskWheelPath -Algorithm SHA256).Hash -ne $taskWheel.sha256) {
+        if ((Get-JanviFileHash $taskWheelPath) -ne $taskWheel.sha256) {
             throw "Dependency checksum mismatch: $($taskWheel.file)"
         }
     }

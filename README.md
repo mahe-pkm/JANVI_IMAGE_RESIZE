@@ -39,6 +39,12 @@ need separate Python, Node.js, Git, Docker, or CUDA installations. A branded
 startup screen explains local setup progress on first launch rather than showing
 a blank window. See the detailed [installation and troubleshooting guide](docs/INSTALLATION.md).
 
+If you prefer a browser workspace, download the separate **Local Server ZIP**.
+Extract it and double-click `START_JANVI_LOCAL_SERVER.cmd`; it starts the same
+local processing service on `127.0.0.1` and opens the default browser. It is not
+a cloud service and needs no internet connection except where Photoshop Remove
+itself requires Adobe access.
+
 After MSI installation, open a **new terminal** in your image folder:
 
 ```cmd

@@ -10,10 +10,16 @@ model. You do not need to install Python, Node.js, Git, Docker or CUDA.
 | --- | --- | --- |
 | **MSI** | Your normal workstation | Download the Windows x64 MSI, close Janvi if it is open, then run the installer. |
 | **Portable ZIP** | Testing or a machine where you do not want an installation | Extract the entire ZIP to a writable local folder. Keep every extracted file together. |
+| **Local Server ZIP** | You prefer the workspace in your default browser | Extract the entire ZIP, then double-click `START_JANVI_LOCAL_SERVER.cmd`. It opens a loopback-only `127.0.0.1` address automatically. |
 
 The app opens in its own window. The first launch prepares its bundled runtime
 locally. The startup screen remains visible with a status message while this
 happens; a first run may take a few minutes.
+
+The Local Server ZIP is a separate browser-based release. It uses the same local
+processing engine and does not upload images or expose the workspace to other
+devices on the network. Keep its extracted folder writable and use
+`STOP_JANVI_LOCAL_SERVER.cmd` after processing is complete.
 
 ## First workflow
 
